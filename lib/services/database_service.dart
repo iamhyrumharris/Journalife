@@ -443,6 +443,46 @@ class DatabaseService {
     await db.delete('entries', where: 'id = ?', whereArgs: [id]);
   }
 
+  // Sync-optimized methods for incremental updates
+  Future<List<Entry>> getEntriesModifiedSince({
+    required String journalId,
+    required DateTime since,
+  }) async {
+    final db = await database;
+    final entryMaps = await db.query(
+      'entries',
+      where: 'journal_id = ? AND updated_at > ?',
+      whereArgs: [journalId, since.millisecondsSinceEpoch],
+      orderBy: 'updated_at DESC',
+    );
+
+    final List<Entry> entries = [];
+    for (final entryMap in entryMaps) {
+      final attachmentMaps = await db.query(
+        'attachments',
+        where: 'entry_id = ?',
+        whereArgs: [entryMap['id']],
+      );
+      final attachments = attachmentMaps
+          .map((map) => Attachment.fromMap(map))
+          .toList();
+      entries.add(Entry.fromMap(entryMap, attachments: attachments));
+    }
+
+    return entries;
+  }
+
+  Future<List<Journal>> getJournalsModifiedSince(DateTime since) async {
+    final db = await database;
+    final maps = await db.query(
+      'journals',
+      where: 'updated_at > ?',
+      whereArgs: [since.millisecondsSinceEpoch],
+      orderBy: 'updated_at DESC',
+    );
+    return maps.map((map) => Journal.fromMap(map)).toList();
+  }
+
   // Attachment operations
   Future<List<Attachment>> getAttachmentsForEntry(String entryId) async {
     final db = await database;

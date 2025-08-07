@@ -25,10 +25,12 @@ class WebDAVSyncService {
   SyncConfig? _currentConfig;
   final DatabaseService _databaseService = DatabaseService();
   final LocalFileStorageService _fileService = LocalFileStorageService();
+  bool _directoriesCreated = false; // Track if directories were already created
 
   /// Initializes the WebDAV client with configuration
   Future<void> initialize(SyncConfig config, String password) async {
     _currentConfig = config;
+    _directoriesCreated = false; // Reset flag for new config
 
     _client = webdav.newClient(
       config.serverUrl,
@@ -38,7 +40,7 @@ class WebDAVSyncService {
     );
 
     try {
-      // Test connection and create base directory structure
+      // Test connection and create base directory structure (only once per config)
       await _ensureDirectoryStructure();
     } catch (e) {
       throw SyncException('Failed to initialize WebDAV connection: $e');
@@ -48,6 +50,12 @@ class WebDAVSyncService {
   /// Ensures the required directory structure exists on the server with date-based organization
   Future<void> _ensureDirectoryStructure() async {
     if (_currentConfig == null) throw SyncException('Not initialized');
+
+    // Skip if directories were already created for this config
+    if (_directoriesCreated) {
+      debugPrint('📁 Directories already created, skipping...');
+      return;
+    }
 
     debugPrint('Creating organized WebDAV directory structure...');
     final directories = _currentConfig!.getRequiredDirectories();
@@ -88,6 +96,7 @@ class WebDAVSyncService {
     }
 
     debugPrint('✅ WebDAV directory structure complete');
+    _directoriesCreated = true; // Mark directories as created
   }
 
   /// Tests the connection to the WebDAV server with comprehensive validation
@@ -505,8 +514,10 @@ class WebDAVSyncService {
     }
   }
 
-  /// Loads the local sync manifest
+  /// Loads the local sync manifest and updates it with new/modified items
   Future<SyncManifest> _loadLocalManifest() async {
+    SyncManifest? existingManifest;
+
     try {
       final manifestFile = await _getLocalManifestFile();
 
@@ -514,19 +525,19 @@ class WebDAVSyncService {
         debugPrint('📋 Loading existing manifest from: ${manifestFile.path}');
         final jsonContent = await manifestFile.readAsString();
         final manifestData = jsonDecode(jsonContent) as Map<String, dynamic>;
-        final manifest = SyncManifest.fromJson(manifestData);
-        debugPrint('📋 Loaded manifest with ${manifest.items.length} items');
-        return manifest;
+        existingManifest = SyncManifest.fromJson(manifestData);
+        debugPrint(
+          '📋 Loaded manifest with ${existingManifest.items.length} items',
+        );
       } else {
         debugPrint('📋 No existing manifest found, will generate new one');
       }
     } catch (e) {
-      debugPrint('Failed to load local manifest: $e');
+      debugPrint('Failed to load existing manifest: $e');
     }
 
-    // If no manifest exists, generate it from the database
-    debugPrint('📋 Generating new manifest...');
-    return await _generateInitialManifest();
+    // Always update the manifest with new/modified items since last sync
+    return await _updateManifestWithNewItems(existingManifest);
   }
 
   /// Generates initial manifest by scanning the local database
@@ -633,6 +644,150 @@ class WebDAVSyncService {
         configId: _currentConfig!.id,
         lastUpdated: DateTime.now(),
       );
+    }
+  }
+
+  /// Updates manifest with new/modified items since last sync (incremental approach)
+  Future<SyncManifest> _updateManifestWithNewItems(
+    SyncManifest? existingManifest,
+  ) async {
+    debugPrint('🔄 Updating manifest with new/modified items...');
+
+    // Start with existing manifest or create new one
+    var manifest =
+        existingManifest ??
+        SyncManifest(configId: _currentConfig!.id, lastUpdated: DateTime.now());
+
+    try {
+      final databaseService = DatabaseService();
+
+      // Get the timestamp from the last update (or use epoch for first sync)
+      final lastSyncTime =
+          existingManifest?.lastUpdated ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      debugPrint('🕒 Checking for changes since: $lastSyncTime');
+
+      // Get journals that are configured to sync
+      final allJournals = await databaseService.getJournalsForUser(
+        'default-user',
+      );
+      final syncedJournals = allJournals
+          .where(
+            (journal) => _currentConfig!.syncedJournalIds.contains(journal.id),
+          )
+          .toList();
+
+      debugPrint(
+        '📚 Scanning ${syncedJournals.length} journals for changes...',
+      );
+
+      for (final journal in syncedJournals) {
+        // Check if journal was modified since last sync
+        if (journal.updatedAt.isAfter(lastSyncTime)) {
+          debugPrint(
+            '📓 Journal "${journal.name}" was modified, updating manifest',
+          );
+          final journalItem = SyncItem(
+            id: journal.id,
+            type: SyncItemType.journal,
+            localModified: journal.updatedAt,
+            syncStatus: SyncItemStatus.needsSync,
+            path: '${_currentConfig!.basePath}/journals/${journal.id}.json',
+            localHash: await _calculateContentHash(
+              jsonEncode(journal.toJson()),
+            ),
+            lastSynced:
+                existingManifest?.getItem(journal.id)?.lastSynced ??
+                DateTime.now(),
+          );
+          manifest = manifest.addItem(journalItem);
+        }
+
+        // Get entries modified since last sync (much more efficient than loading all entries)
+        final modifiedEntries = await databaseService.getEntriesModifiedSince(
+          journalId: journal.id,
+          since: lastSyncTime,
+        );
+
+        debugPrint(
+          '📝 Found ${modifiedEntries.length} modified entries in "${journal.name}"',
+        );
+
+        for (final entry in modifiedEntries) {
+          // Add entry to manifest
+          final year = entry.createdAt.year.toString();
+          final month = entry.createdAt.month.toString().padLeft(2, '0');
+          final entryPath =
+              '${_currentConfig!.basePath}/entries/$year/$month/${entry.id}.json';
+
+          final entryItem = SyncItem(
+            id: entry.id,
+            type: SyncItemType.entry,
+            localModified: entry.updatedAt,
+            syncStatus: SyncItemStatus.needsSync,
+            path: entryPath,
+            localHash: await _calculateContentHash(jsonEncode(entry.toJson())),
+            lastSynced:
+                existingManifest?.getItem(entry.id)?.lastSynced ??
+                DateTime.now(),
+            metadata: {'parentId': journal.id},
+          );
+          manifest = manifest.addItem(entryItem);
+
+          // Add attachments to manifest
+          for (final attachment in entry.attachments) {
+            if (attachment.path.isNotEmpty) {
+              // Only add attachment if it's new or the entry was modified
+              final existingAttachmentItem = existingManifest?.getItem(
+                attachment.id,
+              );
+              if (existingAttachmentItem == null ||
+                  entry.updatedAt.isAfter(lastSyncTime)) {
+                final attachmentItem = SyncItem(
+                  id: attachment.id,
+                  type: SyncItemType.attachment,
+                  localModified: attachment.createdAt,
+                  syncStatus: SyncItemStatus.needsSync,
+                  path: _currentConfig!.getAttachmentPath(attachment.path),
+                  localHash: await _calculateAttachmentHash(attachment),
+                  lastSynced:
+                      existingAttachmentItem?.lastSynced ?? DateTime.now(),
+                  metadata: {
+                    'parentId': entry.id,
+                    'relativePath': attachment.path,
+                  },
+                );
+                manifest = manifest.addItem(attachmentItem);
+                debugPrint(
+                  '📎 Added attachment: ${attachment.name} (${attachment.path})',
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // Update manifest timestamp
+      manifest = manifest.copyWith(lastUpdated: DateTime.now());
+
+      final totalItems = manifest.items.length;
+      final newItemsCount = manifest.items.values
+          .where((item) => item.syncStatus == SyncItemStatus.needsSync)
+          .length;
+
+      debugPrint(
+        '✅ Manifest updated: $totalItems total items, $newItemsCount need sync',
+      );
+
+      return manifest;
+    } catch (e) {
+      debugPrint('❌ Failed to update manifest: $e');
+      // Return existing manifest or empty one as fallback
+      return existingManifest ??
+          SyncManifest(
+            configId: _currentConfig!.id,
+            lastUpdated: DateTime.now(),
+          );
     }
   }
 
