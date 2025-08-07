@@ -124,7 +124,10 @@ class WebDAVSyncService {
       final testFilePath = '$testBasePath/connection_test.txt';
       final testContent =
           'WebDAV connection test - ${DateTime.now().toIso8601String()}';
-      await testClient.write(testFilePath, Uint8List.fromList(utf8.encode(testContent)));
+      await testClient.write(
+        testFilePath,
+        Uint8List.fromList(utf8.encode(testContent)),
+      );
       debugPrint('✓ Test file written successfully');
 
       // Step 4: Test read operation
@@ -191,6 +194,9 @@ class WebDAVSyncService {
     onStatusUpdate?.call(status);
 
     try {
+      debugPrint('🔧 Sync Config Debug: ${_currentConfig!.displayName}');
+      debugPrint('🔧 Synced Journal IDs: ${_currentConfig!.syncedJournalIds}');
+
       // Load local manifest
       final localManifest = await _loadLocalManifest();
 
@@ -210,6 +216,9 @@ class WebDAVSyncService {
       var completedItems = 0;
 
       // Upload local changes
+      debugPrint(
+        'Starting upload of ${syncPlan.itemsToUpload.length} items...',
+      );
       for (final item in syncPlan.itemsToUpload) {
         status = status.copyWith(
           state: SyncState.uploading,
@@ -218,8 +227,14 @@ class WebDAVSyncService {
         );
         onStatusUpdate?.call(status);
 
-        await _uploadItem(item);
-        completedItems++;
+        debugPrint('Uploading ${item.type.name}: ${item.id}');
+        try {
+          await _uploadItem(item);
+          completedItems++;
+        } catch (e) {
+          debugPrint('❌ Failed to upload ${item.type.name} ${item.id}: $e');
+          rethrow;
+        }
 
         status = status.copyWith(completedItems: completedItems);
         onStatusUpdate?.call(status);
@@ -260,12 +275,15 @@ class WebDAVSyncService {
       }
 
       // Upload updated manifest
+      debugPrint('🔄 Merging manifests...');
       final updatedManifest = _mergeManifests(
         localManifest,
         remoteManifest,
         syncPlan,
       );
+      debugPrint('📤 Uploading manifest to server...');
       await _uploadManifest(updatedManifest);
+      debugPrint('💾 Saving manifest locally...');
       await _saveLocalManifest(updatedManifest);
 
       // Complete
@@ -278,6 +296,8 @@ class WebDAVSyncService {
 
       return status;
     } catch (e) {
+      debugPrint('❌ Sync failed with error: $e');
+      debugPrint('❌ Error type: ${e.runtimeType}');
       status = status.copyWith(
         state: SyncState.failed,
         errorMessage: e.toString(),
@@ -302,8 +322,12 @@ class WebDAVSyncService {
         itemsToUpload.add(localItem);
       } else {
         // Item exists in both - check for conflicts
-        if (localItem.localModified.isAfter(remoteItem.remoteModified!) &&
-            remoteItem.remoteModified!.isAfter(localItem.lastSynced)) {
+        final remoteModified = remoteItem.remoteModified;
+        if (remoteModified == null) {
+          // Remote item has no modification date, treat as new upload
+          itemsToUpload.add(localItem);
+        } else if (localItem.localModified.isAfter(remoteModified) &&
+            remoteModified.isAfter(localItem.lastSynced)) {
           // Conflict: both sides modified since last sync
           conflictItems.add(
             SyncConflict(
@@ -313,14 +337,10 @@ class WebDAVSyncService {
               type: ConflictType.bothModified,
             ),
           );
-        } else if (localItem.localModified.isAfter(
-          remoteItem.remoteModified!,
-        )) {
+        } else if (localItem.localModified.isAfter(remoteModified)) {
           // Local is newer - upload
           itemsToUpload.add(localItem);
-        } else if (remoteItem.remoteModified!.isAfter(
-          localItem.localModified,
-        )) {
+        } else if (remoteModified.isAfter(localItem.localModified)) {
           // Remote is newer - download
           itemsToDownload.add(remoteItem);
         }
@@ -383,22 +403,24 @@ class WebDAVSyncService {
     final journal = await _databaseService.getJournal(item.id);
     if (journal == null) throw SyncException('Journal not found: ${item.id}');
 
-    final remotePath = _currentConfig!.getJournalPath(journal.id);
+    final remotePath = '${_currentConfig!.getJournalPath(journal.id)}.json';
     final jsonContent = jsonEncode(journal.toJson());
 
+    debugPrint('Uploading journal: ${journal.name} to $remotePath');
     await _client.write(remotePath, utf8.encode(jsonContent));
+    debugPrint('✓ Journal uploaded successfully: ${journal.name}');
   }
 
   /// Downloads a journal from the WebDAV server
   Future<void> _downloadJournal(SyncItem item) async {
-    final remotePath = _currentConfig!.getJournalPath(item.id);
+    final remotePath = '${_currentConfig!.getJournalPath(item.id)}.json';
     final bytes = await _client.read(remotePath);
     final jsonContent = utf8.decode(bytes);
     final journalData = jsonDecode(jsonContent) as Map<String, dynamic>;
     final journal = Journal.fromJson(journalData);
 
     // Save to local database
-    await _databaseService.createOrUpdateJournal(journal);
+    await _databaseService.insertJournal(journal);
   }
 
   /// Uploads an entry to the WebDAV server
@@ -406,23 +428,21 @@ class WebDAVSyncService {
     final entry = await _databaseService.getEntry(item.id);
     if (entry == null) throw SyncException('Entry not found: ${item.id}');
 
+    final year = entry.createdAt.year.toString();
+    final month = entry.createdAt.month.toString().padLeft(2, '0');
     final remotePath =
-        '${_currentConfig!.getJournalPath(entry.journalId)}/entries/${entry.id}.json';
+        '${_currentConfig!.basePath}/entries/$year/$month/${entry.id}.json';
     final jsonContent = jsonEncode(entry.toJson());
 
+    debugPrint('Uploading entry: ${entry.title} to $remotePath');
     await _client.write(remotePath, utf8.encode(jsonContent));
+    debugPrint('✓ Entry uploaded successfully: ${entry.title}');
   }
 
   /// Downloads an entry from the WebDAV server
   Future<void> _downloadEntry(SyncItem item) async {
-    // Extract journal ID from metadata
-    final journalId = item.metadata?['journalId'] as String?;
-    if (journalId == null) {
-      throw SyncException('Missing journal ID for entry: ${item.id}');
-    }
-
-    final remotePath =
-        '${_currentConfig!.getJournalPath(journalId)}/entries/${item.id}.json';
+    // Use the path stored in the item
+    final remotePath = item.path;
     final bytes = await _client.read(remotePath);
     final jsonContent = utf8.decode(bytes);
     final entryData = jsonDecode(jsonContent) as Map<String, dynamic>;
@@ -434,16 +454,23 @@ class WebDAVSyncService {
 
   /// Uploads an attachment to the WebDAV server
   Future<void> _uploadAttachment(SyncItem item) async {
-    final file = File(item.path);
-    if (!file.existsSync()) {
-      throw SyncException('Attachment file not found: ${item.path}');
+    final relativePath = item.metadata?['relativePath'] as String?;
+    if (relativePath == null) {
+      throw SyncException('Missing relative path for attachment: ${item.id}');
     }
 
-    final remotePath = _currentConfig!.getAttachmentPath(
-      item.metadata?['relativePath'] as String,
-    );
-    final bytes = await file.readAsBytes();
+    // Get the local file using the file storage service
+    final localFile = await _fileService.getFile(relativePath);
+    if (localFile == null || !await localFile.exists()) {
+      throw SyncException('Attachment file not found: $relativePath');
+    }
+
+    final remotePath = _currentConfig!.getAttachmentPath(relativePath);
+    final bytes = await localFile.readAsBytes();
+
+    debugPrint('Uploading attachment: $relativePath to $remotePath');
     await _client.write(remotePath, bytes);
+    debugPrint('✓ Attachment uploaded successfully: $relativePath');
   }
 
   /// Downloads an attachment from the WebDAV server
@@ -484,22 +511,28 @@ class WebDAVSyncService {
       final manifestFile = await _getLocalManifestFile();
 
       if (await manifestFile.exists()) {
+        debugPrint('📋 Loading existing manifest from: ${manifestFile.path}');
         final jsonContent = await manifestFile.readAsString();
         final manifestData = jsonDecode(jsonContent) as Map<String, dynamic>;
-        return SyncManifest.fromJson(manifestData);
+        final manifest = SyncManifest.fromJson(manifestData);
+        debugPrint('📋 Loaded manifest with ${manifest.items.length} items');
+        return manifest;
+      } else {
+        debugPrint('📋 No existing manifest found, will generate new one');
       }
     } catch (e) {
       debugPrint('Failed to load local manifest: $e');
     }
 
     // If no manifest exists, generate it from the database
+    debugPrint('📋 Generating new manifest...');
     return await _generateInitialManifest();
   }
 
   /// Generates initial manifest by scanning the local database
   Future<SyncManifest> _generateInitialManifest() async {
     debugPrint('Generating initial sync manifest from database...');
-    
+
     var manifest = SyncManifest(
       configId: _currentConfig!.id,
       lastUpdated: DateTime.now(),
@@ -507,14 +540,26 @@ class WebDAVSyncService {
 
     try {
       final databaseService = DatabaseService();
-      
-      // Get all journals that are configured to sync
-      final allJournals = await databaseService.getJournalsForUser('default-user');
-      final syncedJournals = allJournals.where(
-        (journal) => _currentConfig!.syncedJournalIds.contains(journal.id),
-      ).toList();
 
-      debugPrint('Found ${syncedJournals.length} journals to sync: ${syncedJournals.map((j) => j.name).join(', ')}');
+      // Get all journals that are configured to sync
+      final allJournals = await databaseService.getJournalsForUser(
+        'default-user',
+      );
+      final syncedJournals = allJournals
+          .where(
+            (journal) => _currentConfig!.syncedJournalIds.contains(journal.id),
+          )
+          .toList();
+
+      debugPrint(
+        'Found ${syncedJournals.length} journals to sync: ${syncedJournals.map((j) => j.name).join(', ')}',
+      );
+      debugPrint(
+        'Configured journal IDs for sync: ${_currentConfig!.syncedJournalIds}',
+      );
+      debugPrint(
+        'All available journals: ${allJournals.map((j) => '${j.name} (${j.id})').join(', ')}',
+      );
 
       for (final journal in syncedJournals) {
         // Add journal to manifest
@@ -535,12 +580,17 @@ class WebDAVSyncService {
 
         for (final entry in entries) {
           // Add entry to manifest
+          final year = entry.createdAt.year.toString();
+          final month = entry.createdAt.month.toString().padLeft(2, '0');
+          final entryPath =
+              '${_currentConfig!.basePath}/entries/$year/$month/${entry.id}.json';
+
           final entryItem = SyncItem(
             id: entry.id,
             type: SyncItemType.entry,
             localModified: entry.updatedAt,
             syncStatus: SyncItemStatus.needsSync,
-            path: _currentConfig!.getJournalEntriesPath(entry.createdAt),
+            path: entryPath,
             localHash: await _calculateContentHash(jsonEncode(entry.toJson())),
             lastSynced: DateTime.now(),
             metadata: {'parentId': journal.id},
@@ -555,10 +605,13 @@ class WebDAVSyncService {
                 type: SyncItemType.attachment,
                 localModified: attachment.createdAt,
                 syncStatus: SyncItemStatus.needsSync,
-                path: '${_currentConfig!.basePath}/${attachment.path}',
+                path: _currentConfig!.getAttachmentPath(attachment.path),
                 localHash: await _calculateAttachmentHash(attachment),
                 lastSynced: DateTime.now(),
-                metadata: {'parentId': entry.id},
+                metadata: {
+                  'parentId': entry.id,
+                  'relativePath': attachment.path,
+                },
               );
               manifest = manifest.addItem(attachmentItem);
             }
@@ -568,10 +621,10 @@ class WebDAVSyncService {
 
       final totalItems = manifest.items.length;
       debugPrint('Generated initial manifest with $totalItems items');
-      
+
       // Save the generated manifest
       await _saveLocalManifest(manifest);
-      
+
       return manifest;
     } catch (e) {
       debugPrint('Failed to generate initial manifest: $e');
@@ -601,7 +654,7 @@ class WebDAVSyncService {
         final digest = sha256.convert(fileBytes);
         return digest.toString();
       }
-      
+
       // Fallback to metadata-based hash if file not found
       final metadataJson = jsonEncode({
         'id': attachment.id,
@@ -612,7 +665,9 @@ class WebDAVSyncService {
       });
       return await _calculateContentHash(metadataJson);
     } catch (e) {
-      debugPrint('Failed to calculate attachment hash for ${attachment.name}: $e');
+      debugPrint(
+        'Failed to calculate attachment hash for ${attachment.name}: $e',
+      );
       // Fallback hash based on metadata
       final metadataJson = jsonEncode({
         'id': attachment.id,
@@ -639,9 +694,18 @@ class WebDAVSyncService {
 
   /// Uploads the sync manifest to the WebDAV server
   Future<void> _uploadManifest(SyncManifest manifest) async {
-    final remotePath = '${_currentConfig!.basePath}/manifest.json';
-    final jsonContent = jsonEncode(manifest.toJson());
-    await _client.write(remotePath, utf8.encode(jsonContent));
+    try {
+      final remotePath = '${_currentConfig!.basePath}/manifest.json';
+      final jsonContent = jsonEncode(manifest.toJson());
+      debugPrint(
+        '📤 Uploading manifest to: $remotePath (${jsonContent.length} bytes)',
+      );
+      await _client.write(remotePath, utf8.encode(jsonContent));
+      debugPrint('✅ Manifest uploaded successfully');
+    } catch (e) {
+      debugPrint('❌ Failed to upload manifest: $e');
+      throw SyncException('Failed to upload manifest to server: $e');
+    }
   }
 
   /// Saves the sync manifest locally
@@ -708,6 +772,19 @@ class WebDAVSyncService {
     }
 
     return merged;
+  }
+
+  /// Clears the local manifest to force regeneration
+  Future<void> clearLocalManifest() async {
+    try {
+      final manifestFile = await _getLocalManifestFile();
+      if (await manifestFile.exists()) {
+        await manifestFile.delete();
+        debugPrint('🗑️ Cleared local manifest file');
+      }
+    } catch (e) {
+      debugPrint('Failed to clear local manifest: $e');
+    }
   }
 
   /// Gets the local file path for the sync manifest

@@ -2,13 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sync_config.dart';
 import '../services/database_service.dart';
+import '../services/webdav_sync_service.dart';
 import 'database_provider.dart';
 
 /// Provider for WebDAV sync configuration management
-final syncConfigProvider = StateNotifierProvider<SyncConfigNotifier, AsyncValue<List<SyncConfig>>>((ref) {
-  final databaseService = ref.watch(databaseServiceProvider);
-  return SyncConfigNotifier(databaseService);
-});
+final syncConfigProvider =
+    StateNotifierProvider<SyncConfigNotifier, AsyncValue<List<SyncConfig>>>((
+      ref,
+    ) {
+      final databaseService = ref.watch(databaseServiceProvider);
+      return SyncConfigNotifier(databaseService);
+    });
 
 /// Provider for the currently active sync configuration
 final activeSyncConfigProvider = StateProvider<SyncConfig?>((ref) => null);
@@ -18,7 +22,8 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
   final DatabaseService _databaseService;
   final _uuid = const Uuid();
 
-  SyncConfigNotifier(this._databaseService) : super(const AsyncValue.loading()) {
+  SyncConfigNotifier(this._databaseService)
+    : super(const AsyncValue.loading()) {
     loadConfigurations();
   }
 
@@ -48,7 +53,7 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
     try {
       // Ensure URL is properly formatted
       final formattedUrl = _normalizeServerUrl(serverUrl);
-      
+
       final config = SyncConfig(
         id: _uuid.v4(),
         serverUrl: formattedUrl,
@@ -66,7 +71,7 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
       );
 
       await _databaseService.createSyncConfiguration(config);
-      
+
       // Store password securely if provided
       if (password != null) {
         await _databaseService.storeSyncPassword(config.id, password);
@@ -85,7 +90,7 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
       final configWithUpdatedTime = updatedConfig.copyWith(
         updatedAt: DateTime.now(),
       );
-      
+
       await _databaseService.updateSyncConfiguration(configWithUpdatedTime);
       await loadConfigurations();
     } catch (error) {
@@ -109,13 +114,13 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
     try {
       final configs = state.value ?? [];
       final configIndex = configs.indexWhere((c) => c.id == configId);
-      
+
       if (configIndex != -1) {
         final updatedConfig = configs[configIndex].copyWith(
           lastSyncAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        
+
         await _databaseService.updateSyncConfiguration(updatedConfig);
         await loadConfigurations();
       }
@@ -129,13 +134,13 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
     try {
       final configs = state.value ?? [];
       final configIndex = configs.indexWhere((c) => c.id == configId);
-      
+
       if (configIndex != -1) {
         final updatedConfig = configs[configIndex].copyWith(
           enabled: enabled,
           updatedAt: DateTime.now(),
         );
-        
+
         await _databaseService.updateSyncConfiguration(updatedConfig);
         await loadConfigurations();
       }
@@ -145,18 +150,26 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
   }
 
   /// Updates which journals are synced for a configuration
-  Future<void> updateSyncedJournals(String configId, List<String> journalIds) async {
+  Future<void> updateSyncedJournals(
+    String configId,
+    List<String> journalIds,
+  ) async {
     try {
       final configs = state.value ?? [];
       final configIndex = configs.indexWhere((c) => c.id == configId);
-      
+
       if (configIndex != -1) {
         final updatedConfig = configs[configIndex].copyWith(
           syncedJournalIds: journalIds,
           updatedAt: DateTime.now(),
         );
-        
+
         await _databaseService.updateSyncConfiguration(updatedConfig);
+
+        // Clear the local manifest to force regeneration with new journal config
+        final syncService = WebDAVSyncService();
+        await syncService.clearLocalManifest();
+
         await loadConfigurations();
       }
     } catch (error) {
@@ -189,15 +202,15 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
     if (displayName.trim().isEmpty) {
       return 'Display name cannot be empty';
     }
-    
+
     if (username.trim().isEmpty) {
       return 'Username cannot be empty';
     }
-    
+
     if (serverUrl.trim().isEmpty) {
       return 'Server URL cannot be empty';
     }
-    
+
     // Basic URL validation
     try {
       final uri = Uri.parse(_normalizeServerUrl(serverUrl));
@@ -207,42 +220,51 @@ class SyncConfigNotifier extends StateNotifier<AsyncValue<List<SyncConfig>>> {
     } catch (e) {
       return 'Invalid URL format';
     }
-    
+
     // Check for duplicate display names
     final configs = state.value ?? [];
-    if (configs.any((c) => c.displayName.toLowerCase() == displayName.toLowerCase())) {
+    if (configs.any(
+      (c) => c.displayName.toLowerCase() == displayName.toLowerCase(),
+    )) {
       return 'A configuration with this display name already exists';
     }
-    
+
     return null;
   }
 
   /// Normalizes server URL format
   String _normalizeServerUrl(String url) {
     var normalized = url.trim();
-    
+
     // Add https:// if no scheme provided
-    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    if (!normalized.startsWith('http://') &&
+        !normalized.startsWith('https://')) {
       normalized = 'https://$normalized';
     }
-    
+
     // Remove trailing slash
     if (normalized.endsWith('/')) {
       normalized = normalized.substring(0, normalized.length - 1);
     }
-    
+
     return normalized;
   }
 }
 
 /// Provider for getting the stored password for a sync configuration
-final syncPasswordProvider = FutureProvider.family<String?, String>((ref, configId) async {
+final syncPasswordProvider = FutureProvider.family<String?, String>((
+  ref,
+  configId,
+) async {
   final databaseService = ref.watch(databaseServiceProvider);
   return await databaseService.getSyncPassword(configId);
 });
 
 /// Provider for checking if a sync configuration has a stored password
-final hasSyncPasswordProvider = FutureProvider.family<bool, String>((ref, configId) async {
+final hasSyncPasswordProvider = FutureProvider.family<bool, String>((
+  ref,
+  configId,
+) async {
   final password = await ref.watch(syncPasswordProvider(configId).future);
   return password != null && password.isNotEmpty;
 });
