@@ -168,7 +168,7 @@ class _JournalEditScreenState extends ConsumerState<JournalEditScreen> {
                 runSpacing: 8,
                 children: [
                   _buildIconOption(null), // No icon option
-                  ..._icons.map((icon) => _buildIconOption(icon)).toList(),
+                  ..._icons.map((icon) => _buildIconOption(icon)),
                 ],
               ),
               const SizedBox(height: 32),

@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
-import '../../lib/models/attachment.dart';
-import '../../lib/models/entry.dart';
-import '../../lib/models/journal.dart';
-import '../../lib/models/user.dart';
+import 'package:journal_new/models/attachment.dart';
+import 'package:journal_new/models/entry.dart';
+import 'package:journal_new/models/journal.dart';
+import 'package:journal_new/models/user.dart';
 
 /// Utility class for generating test data for migration and sharing tests
 class TestDataGenerator {

@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +11,7 @@ import '../models/sync_status.dart';
 import '../models/sync_manifest.dart';
 import '../models/journal.dart';
 import '../models/entry.dart';
+import '../models/attachment.dart';
 import 'database_service.dart';
 import 'local_file_storage_service.dart';
 
@@ -121,7 +124,7 @@ class WebDAVSyncService {
       final testFilePath = '$testBasePath/connection_test.txt';
       final testContent =
           'WebDAV connection test - ${DateTime.now().toIso8601String()}';
-      await testClient.write(testFilePath, utf8.encode(testContent));
+      await testClient.write(testFilePath, Uint8List.fromList(utf8.encode(testContent)));
       debugPrint('✓ Test file written successfully');
 
       // Step 4: Test read operation
@@ -414,8 +417,9 @@ class WebDAVSyncService {
   Future<void> _downloadEntry(SyncItem item) async {
     // Extract journal ID from metadata
     final journalId = item.metadata?['journalId'] as String?;
-    if (journalId == null)
+    if (journalId == null) {
       throw SyncException('Missing journal ID for entry: ${item.id}');
+    }
 
     final remotePath =
         '${_currentConfig!.getJournalPath(journalId)}/entries/${item.id}.json';
@@ -445,14 +449,16 @@ class WebDAVSyncService {
   /// Downloads an attachment from the WebDAV server
   Future<void> _downloadAttachment(SyncItem item) async {
     final relativePath = item.metadata?['relativePath'] as String?;
-    if (relativePath == null)
+    if (relativePath == null) {
       throw SyncException('Missing relative path for attachment: ${item.id}');
+    }
 
     final remotePath = _currentConfig!.getAttachmentPath(relativePath);
     final localFile = await _fileService.getFile(relativePath);
 
-    if (localFile == null)
+    if (localFile == null) {
       throw SyncException('Could not create local file for: $relativePath');
+    }
 
     final bytes = await _client.read(remotePath);
     await localFile.writeAsBytes(bytes);
@@ -486,11 +492,135 @@ class WebDAVSyncService {
       debugPrint('Failed to load local manifest: $e');
     }
 
-    // Return empty manifest if none exists or failed to load
-    return SyncManifest(
+    // If no manifest exists, generate it from the database
+    return await _generateInitialManifest();
+  }
+
+  /// Generates initial manifest by scanning the local database
+  Future<SyncManifest> _generateInitialManifest() async {
+    debugPrint('Generating initial sync manifest from database...');
+    
+    var manifest = SyncManifest(
       configId: _currentConfig!.id,
       lastUpdated: DateTime.now(),
     );
+
+    try {
+      final databaseService = DatabaseService();
+      
+      // Get all journals that are configured to sync
+      final allJournals = await databaseService.getJournalsForUser('default-user');
+      final syncedJournals = allJournals.where(
+        (journal) => _currentConfig!.syncedJournalIds.contains(journal.id),
+      ).toList();
+
+      debugPrint('Found ${syncedJournals.length} journals to sync: ${syncedJournals.map((j) => j.name).join(', ')}');
+
+      for (final journal in syncedJournals) {
+        // Add journal to manifest
+        final journalItem = SyncItem(
+          id: journal.id,
+          type: SyncItemType.journal,
+          localModified: journal.updatedAt,
+          syncStatus: SyncItemStatus.needsSync,
+          path: '${_currentConfig!.basePath}/journals/${journal.id}.json',
+          localHash: await _calculateContentHash(jsonEncode(journal.toJson())),
+          lastSynced: DateTime.now(),
+        );
+        manifest = manifest.addItem(journalItem);
+
+        // Get all entries for this journal
+        final entries = await databaseService.getEntriesForJournal(journal.id);
+        debugPrint('Journal "${journal.name}" has ${entries.length} entries');
+
+        for (final entry in entries) {
+          // Add entry to manifest
+          final entryItem = SyncItem(
+            id: entry.id,
+            type: SyncItemType.entry,
+            localModified: entry.updatedAt,
+            syncStatus: SyncItemStatus.needsSync,
+            path: _currentConfig!.getJournalEntriesPath(entry.createdAt),
+            localHash: await _calculateContentHash(jsonEncode(entry.toJson())),
+            lastSynced: DateTime.now(),
+            metadata: {'parentId': journal.id},
+          );
+          manifest = manifest.addItem(entryItem);
+
+          // Add attachments to manifest
+          for (final attachment in entry.attachments) {
+            if (attachment.path.isNotEmpty) {
+              final attachmentItem = SyncItem(
+                id: attachment.id,
+                type: SyncItemType.attachment,
+                localModified: attachment.createdAt,
+                syncStatus: SyncItemStatus.needsSync,
+                path: '${_currentConfig!.basePath}/${attachment.path}',
+                localHash: await _calculateAttachmentHash(attachment),
+                lastSynced: DateTime.now(),
+                metadata: {'parentId': entry.id},
+              );
+              manifest = manifest.addItem(attachmentItem);
+            }
+          }
+        }
+      }
+
+      final totalItems = manifest.items.length;
+      debugPrint('Generated initial manifest with $totalItems items');
+      
+      // Save the generated manifest
+      await _saveLocalManifest(manifest);
+      
+      return manifest;
+    } catch (e) {
+      debugPrint('Failed to generate initial manifest: $e');
+      // Return empty manifest as fallback
+      return SyncManifest(
+        configId: _currentConfig!.id,
+        lastUpdated: DateTime.now(),
+      );
+    }
+  }
+
+  /// Calculates content hash for sync item
+  Future<String> _calculateContentHash(String content) async {
+    final bytes = utf8.encode(content);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
+  /// Calculates hash for attachment file
+  Future<String> _calculateAttachmentHash(Attachment attachment) async {
+    try {
+      // Try to read the local file and calculate hash
+      final localStorageService = LocalFileStorageService();
+      final file = await localStorageService.getFile(attachment.path);
+      if (file != null && await file.exists()) {
+        final fileBytes = await file.readAsBytes();
+        final digest = sha256.convert(fileBytes);
+        return digest.toString();
+      }
+      
+      // Fallback to metadata-based hash if file not found
+      final metadataJson = jsonEncode({
+        'id': attachment.id,
+        'name': attachment.name,
+        'size': attachment.size,
+        'mimeType': attachment.mimeType,
+        'createdAt': attachment.createdAt.toIso8601String(),
+      });
+      return await _calculateContentHash(metadataJson);
+    } catch (e) {
+      debugPrint('Failed to calculate attachment hash for ${attachment.name}: $e');
+      // Fallback hash based on metadata
+      final metadataJson = jsonEncode({
+        'id': attachment.id,
+        'name': attachment.name,
+        'size': attachment.size ?? 0,
+      });
+      return await _calculateContentHash(metadataJson);
+    }
   }
 
   /// Downloads the remote sync manifest

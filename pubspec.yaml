@@ -78,6 +78,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  
+  # Integration testing
+  integration_test:
+    sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -90,6 +94,7 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+  sqflite_common_ffi: any
 flutter:
 
   # The following line ensures that the Material Icons font is

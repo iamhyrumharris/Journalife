@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sync_config.dart';
 import '../../providers/sync_config_provider.dart';
 import '../../providers/sync_provider.dart';
-import '../../providers/journal_provider.dart';
 import '../../providers/database_provider.dart';
+import '../../services/webdav_validation_service.dart';
 
 class WebDAVSetupScreen extends ConsumerStatefulWidget {
   final SyncConfig? config; // null for new config, existing config for editing
@@ -29,6 +29,7 @@ class _WebDAVSetupScreenState extends ConsumerState<WebDAVSetupScreen> {
   bool _passwordVisible = false;
   bool _isTestingConnection = false;
   bool _isSaving = false;
+  bool _isRunningValidation = false;
 
   @override
   void initState() {
@@ -403,8 +404,25 @@ class _WebDAVSetupScreenState extends ConsumerState<WebDAVSetupScreen> {
         ),
         const SizedBox(height: 12),
 
+        OutlinedButton.icon(
+          onPressed: _isRunningValidation ? null : _runFullValidation,
+          icon: _isRunningValidation
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.checklist),
+          label: Text(_isRunningValidation ? 'Validating...' : 'Run Full Validation'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Theme.of(context).primaryColor,
+            side: BorderSide(color: Theme.of(context).primaryColor),
+          ),
+        ),
+        const SizedBox(height: 12),
+
         ElevatedButton.icon(
-          onPressed: (_isSaving || _isTestingConnection)
+          onPressed: (_isSaving || _isTestingConnection || _isRunningValidation)
               ? null
               : _saveConfiguration,
           style: ElevatedButton.styleFrom(
@@ -572,6 +590,301 @@ class _WebDAVSetupScreenState extends ConsumerState<WebDAVSetupScreen> {
         });
       }
     }
+  }
+
+  /// Runs comprehensive WebDAV validation with detailed results
+  Future<void> _runFullValidation() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isRunningValidation = true;
+    });
+
+    try {
+      // Get password - either from form or stored password for existing config
+      String password;
+      if (_passwordController.text.trim().isNotEmpty) {
+        // Use password from form
+        password = _passwordController.text.trim();
+      } else if (widget.config != null) {
+        // Try to get stored password for existing config
+        try {
+          final storedPassword = await ref
+              .read(databaseServiceProvider)
+              .getSyncPassword(widget.config!.id);
+          if (storedPassword == null || storedPassword.isEmpty) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Password is required for validation. Please enter your password in the password field.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return;
+          }
+          password = storedPassword;
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to retrieve stored password: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        // New config and no password provided
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Password is required for validation'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Create a temporary config for validation
+      final testConfig = SyncConfig(
+        id: widget.config?.id ?? 'validation',
+        serverUrl: _serverUrlController.text.trim(),
+        username: _usernameController.text.trim(),
+        displayName: _displayNameController.text.trim(),
+        lastSyncAt: DateTime.now(),
+        syncFrequency: _syncFrequency,
+        syncOnWifiOnly: _syncOnWifiOnly,
+        syncAttachments: _syncAttachments,
+        encryptData: _encryptData,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      debugPrint('🔍 Running full validation with:');
+      debugPrint('Server URL: ${testConfig.serverUrl}');
+      debugPrint('Username: ${testConfig.username}');
+      debugPrint('Using stored password: ${_passwordController.text.trim().isEmpty && widget.config != null}');
+
+      final validationService = WebDAVValidationService();
+      final result = await validationService.performFullValidation(
+        testConfig,
+        password,
+      );
+
+      if (mounted) {
+        _showValidationResults(result);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Validation failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRunningValidation = false;
+        });
+      }
+    }
+  }
+
+  /// Shows detailed validation results in a dialog
+  void _showValidationResults(WebDAVValidationResult result) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              result.overallSuccess ? Icons.check_circle : Icons.error,
+              color: result.overallSuccess ? Colors.green : Colors.red,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Validation Results',
+              style: TextStyle(
+                color: result.overallSuccess ? Colors.green : Colors.red,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                result.summary,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Test Results:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: result.tests.map((test) => Card(
+                      color: test.success
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.red.withValues(alpha: 0.1),
+                      child: ListTile(
+                        leading: Icon(
+                          test.success ? Icons.check : Icons.close,
+                          color: test.success ? Colors.green : Colors.red,
+                        ),
+                        title: Text(
+                          test.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(test.message),
+                            if (test.details.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                test.details,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        isThreeLine: test.details.isNotEmpty,
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              ),
+              if (result.overallSuccess) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'All tests passed! Your WebDAV server is properly configured and all required directories have been created.',
+                          style: TextStyle(color: Colors.green),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.error, color: Colors.red),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Some tests failed. Please check your configuration and server settings.',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          if (!result.overallSuccess)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showValidationTroubleshooting();
+              },
+              child: const Text('Troubleshooting'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows troubleshooting dialog for validation failures
+  void _showValidationTroubleshooting() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Troubleshooting'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Common Issues and Solutions:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 16),
+              Text('• Authentication Failed (401)'),
+              Text('  → Check username and password'),
+              Text('  → Verify account is not locked'),
+              SizedBox(height: 8),
+              Text('• Permission Denied (403)'),
+              Text('  → Check user has WebDAV access'),
+              Text('  → Verify folder creation permissions'),
+              SizedBox(height: 8),
+              Text('• Server Not Found (404)'),
+              Text('  → Check server URL is correct'),
+              Text('  → Verify WebDAV is enabled on server'),
+              SizedBox(height: 8),
+              Text('• Network Timeout'),
+              Text('  → Check internet connection'),
+              Text('  → Try connecting to server from browser'),
+              SizedBox(height: 8),
+              Text('• Directory Creation Failed'),
+              Text('  → User may need admin privileges'),
+              Text('  → Check available disk space'),
+              SizedBox(height: 8),
+              Text('• File Operations Failed'),
+              Text('  → Check read/write permissions'),
+              Text('  → Verify server supports WebDAV operations'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveConfiguration() async {

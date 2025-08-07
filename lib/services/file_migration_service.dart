@@ -1,9 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
-import 'package:sqflite/sqflite.dart';
 import '../models/attachment.dart';
-import '../models/entry.dart';
 import 'local_file_storage_service.dart';
 import 'storage_path_utils.dart';
 import 'database_service.dart';

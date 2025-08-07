@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path;
-import '../../lib/models/attachment.dart';
-import '../../lib/models/entry.dart';
-import '../../lib/models/journal.dart';
-import '../../lib/models/user.dart';
-import '../../lib/services/database_service.dart';
+import 'package:journal_new/models/attachment.dart';
+import 'package:journal_new/models/entry.dart';
+import 'package:journal_new/models/journal.dart';
+import 'package:journal_new/models/user.dart';
 
 /// Helper class for managing test databases in isolation
 class TestDatabaseHelper {

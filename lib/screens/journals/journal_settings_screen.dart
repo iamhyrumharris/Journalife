@@ -617,7 +617,7 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
                 ),
               ],
             );
-          }).toList(),
+          }),
 
           if (configs.length > 3) ...[
             const Divider(height: 1),
@@ -675,63 +675,117 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
             ),
             const SizedBox(height: 12),
 
-            // Show which sync configs include this journal
+            // Show sync configuration controls for each config
             if (configs.isNotEmpty) ...[
               const Text(
-                'This journal is included in:',
+                'Include this journal in sync configurations:',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
-              const SizedBox(height: 8),
-              ...configs
-                  .where(
-                    (config) =>
-                        config.syncedJournalIds.contains(widget.journal.id),
-                  )
-                  .map(
-                    (config) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            config.enabled
-                                ? Icons.check_circle
-                                : Icons.pause_circle,
-                            size: 16,
-                            color: config.enabled ? Colors.green : Colors.grey,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(config.displayName)),
-                          if (config.enabled)
-                            Text(
-                              'Active',
-                              style: TextStyle(
-                                color: Colors.green[600],
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                        ],
+              const SizedBox(height: 12),
+              ...configs.map((config) {
+                final isIncluded = config.syncedJournalIds.contains(widget.journal.id);
+                return Card(
+                  color: isIncluded 
+                    ? (config.enabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1))
+                    : null,
+                  child: SwitchListTile(
+                    title: Text(config.displayName),
+                    subtitle: Text(
+                      config.enabled 
+                        ? (isIncluded ? 'Active sync • Included' : 'Active sync • Not included')
+                        : 'Sync paused',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: config.enabled 
+                          ? (isIncluded ? Colors.green[700] : Colors.grey[600])
+                          : Colors.grey[500],
+                      ),
+                    ),
+                    value: isIncluded,
+                    onChanged: (value) => _toggleJournalInSync(config.id, value),
+                    secondary: Icon(
+                      config.enabled
+                        ? (isIncluded ? Icons.cloud_done : Icons.cloud_off)
+                        : Icons.cloud_off,
+                      color: config.enabled 
+                        ? (isIncluded ? Colors.green : Colors.grey)
+                        : Colors.grey,
+                    ),
+                  ),
+                );
+              }),
+
+              const SizedBox(height: 12),
+              
+              // Summary
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This journal is included in ${configs.where((c) => c.syncedJournalIds.contains(widget.journal.id)).length} of ${configs.length} sync configurations.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              // Quick actions
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: configs.any((c) => !c.syncedJournalIds.contains(widget.journal.id))
+                        ? () => _addToAllSyncConfigs(configs)
+                        : null,
+                      icon: const Icon(Icons.add_to_photos, size: 16),
+                      label: const Text('Add to All'),
+                      style: OutlinedButton.styleFrom(
+                        textStyle: const TextStyle(fontSize: 12),
                       ),
                     ),
                   ),
-
-              if (configs
-                  .where(
-                    (config) =>
-                        config.syncedJournalIds.contains(widget.journal.id),
-                  )
-                  .isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'This journal is not included in any sync configurations.',
-                    style: TextStyle(color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: configs.any((c) => c.syncedJournalIds.contains(widget.journal.id))
+                        ? () => _removeFromAllSyncConfigs(configs)
+                        : null,
+                      icon: const Icon(Icons.remove_from_queue, size: 16),
+                      label: const Text('Remove from All'),
+                      style: OutlinedButton.styleFrom(
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ),
-                ),
+                ],
+              ),
             ] else ...[
               const Text(
                 'No sync configurations found. Create a WebDAV configuration to sync this journal.',
                 style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _addWebDAVConfiguration,
+                icon: const Icon(Icons.add),
+                label: const Text('Add WebDAV Configuration'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
               ),
             ],
           ],
@@ -941,6 +995,153 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
             backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+  }
+
+  void _toggleJournalInSync(String configId, bool include) async {
+    try {
+      final configs = ref.read(syncConfigProvider).value ?? [];
+      final config = configs.firstWhere((c) => c.id == configId);
+      
+      List<String> updatedJournalIds = List.from(config.syncedJournalIds);
+      
+      if (include) {
+        // Add journal to sync if not already included
+        if (!updatedJournalIds.contains(widget.journal.id)) {
+          updatedJournalIds.add(widget.journal.id);
+        }
+      } else {
+        // Remove journal from sync
+        updatedJournalIds.removeWhere((id) => id == widget.journal.id);
+      }
+      
+      // Update the sync configuration
+      await ref.read(syncConfigProvider.notifier).updateSyncedJournals(
+        configId, 
+        updatedJournalIds,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              include 
+                ? 'Journal added to ${config.displayName} sync'
+                : 'Journal removed from ${config.displayName} sync',
+            ),
+            backgroundColor: include ? Colors.green : Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update sync settings: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _addToAllSyncConfigs(List<SyncConfig> configs) async {
+    try {
+      int addedCount = 0;
+      
+      for (final config in configs) {
+        if (!config.syncedJournalIds.contains(widget.journal.id)) {
+          final updatedJournalIds = [...config.syncedJournalIds, widget.journal.id];
+          await ref.read(syncConfigProvider.notifier).updateSyncedJournals(
+            config.id,
+            updatedJournalIds,
+          );
+          addedCount++;
+        }
+      }
+      
+      if (mounted && addedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Journal added to $addedCount sync configuration${addedCount == 1 ? '' : 's'}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add to all sync configurations: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeFromAllSyncConfigs(List<SyncConfig> configs) async {
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from All Sync Configurations'),
+        content: Text(
+          'Are you sure you want to remove "${widget.journal.name}" from all sync configurations? This will stop it from being backed up.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Remove from All'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRemove == true) {
+      try {
+        int removedCount = 0;
+        
+        for (final config in configs) {
+          if (config.syncedJournalIds.contains(widget.journal.id)) {
+            final updatedJournalIds = config.syncedJournalIds
+                .where((id) => id != widget.journal.id)
+                .toList();
+            await ref.read(syncConfigProvider.notifier).updateSyncedJournals(
+              config.id,
+              updatedJournalIds,
+            );
+            removedCount++;
+          }
+        }
+        
+        if (mounted && removedCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Journal removed from $removedCount sync configuration${removedCount == 1 ? '' : 's'}',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to remove from sync configurations: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

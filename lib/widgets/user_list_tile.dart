@@ -202,10 +202,8 @@ class UserListTileSelectable extends UserListTile {
     final baseWidget = super.build(context, ref);
     
     // If it's a regular ListTile, add our checkbox
-    if (baseWidget is Widget) {
-      return _addCheckboxToListTile(baseWidget as ListTile);
-    }
-    
+    return _addCheckboxToListTile(baseWidget as ListTile);
+      
     return baseWidget;
   }
 

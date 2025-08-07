@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import '../../lib/services/file_migration_service.dart';
-import '../../lib/services/local_file_storage_service.dart';
-import '../../lib/services/attachment_service.dart';
-import '../../lib/models/attachment.dart';
-import '../../lib/models/entry.dart';
+import 'package:journal_new/services/file_migration_service.dart';
+import 'package:journal_new/services/local_file_storage_service.dart';
+import 'package:journal_new/services/attachment_service.dart';
+import 'package:journal_new/models/attachment.dart';
+import 'package:journal_new/models/entry.dart';
 import '../test_helpers/test_database_helper.dart';
 import '../test_helpers/test_data_generator.dart';
 import '../test_helpers/test_file_helper.dart';

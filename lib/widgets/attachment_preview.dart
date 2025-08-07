@@ -215,7 +215,7 @@ class _AttachmentPreviewState extends State<AttachmentPreview> {
         
         if (exists) {
           final size = await file.length();
-          debugPrint('✓ Legacy file verified: ${size} bytes');
+          debugPrint('✓ Legacy file verified: $size bytes');
         }
         
         return exists ? file : null;
@@ -232,7 +232,7 @@ class _AttachmentPreviewState extends State<AttachmentPreview> {
         
         if (exists) {
           final size = await resolvedFile.length();
-          debugPrint('✓ Resolved file verified: ${size} bytes');
+          debugPrint('✓ Resolved file verified: $size bytes');
           debugPrint('✅ File resolution successful!');
         } else {
           debugPrint('❌ Resolved file does not exist on disk');

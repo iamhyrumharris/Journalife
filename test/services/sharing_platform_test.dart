@@ -1,9 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:share_plus/share_plus.dart';
-import '../../lib/services/attachment_service.dart';
-import '../../lib/models/attachment.dart';
+import 'package:journal_new/services/attachment_service.dart';
+import 'package:journal_new/models/attachment.dart';
 import '../test_helpers/test_data_generator.dart';
 import '../test_helpers/test_file_helper.dart';
 

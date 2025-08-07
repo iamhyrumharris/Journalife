@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
-import '../../lib/models/attachment.dart';
+import 'package:journal_new/models/attachment.dart';
 import 'test_data_generator.dart';
 
 /// Helper class for managing test files and directories

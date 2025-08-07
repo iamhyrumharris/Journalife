@@ -63,7 +63,7 @@ class LocalFileStorageService implements FileStorageService {
       }
       
       final sourceSize = await sourceFile.length();
-      debugPrint('✓ Source file verified: ${sourceSize} bytes');
+      debugPrint('✓ Source file verified: $sourceSize bytes');
       
       final mediaDir = await _getMediaDirectory();
       debugPrint('Media directory: ${mediaDir.path}');
@@ -91,12 +91,12 @@ class LocalFileStorageService implements FileStorageService {
       // Verify the copy
       if (await targetFile.exists()) {
         final targetSize = await targetFile.length();
-        debugPrint('✓ Target file verified: ${targetSize} bytes');
+        debugPrint('✓ Target file verified: $targetSize bytes');
         
         if (targetSize == sourceSize) {
           debugPrint('✅ File copy successful and verified!');
         } else {
-          debugPrint('⚠️ Size mismatch: source ${sourceSize} vs target ${targetSize}');
+          debugPrint('⚠️ Size mismatch: source $sourceSize vs target $targetSize');
         }
       } else {
         debugPrint('❌ Target file does not exist after copy');
@@ -135,7 +135,7 @@ class LocalFileStorageService implements FileStorageService {
       
       if (exists) {
         final size = await file.length();
-        debugPrint('✓ File verified: ${size} bytes');
+        debugPrint('✓ File verified: $size bytes');
         debugPrint('✅ getFile() successful!');
         return file;
       } else {

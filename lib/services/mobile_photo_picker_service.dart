@@ -101,7 +101,7 @@ class MobilePhotoPickerService implements PhotoPickerService {
       }
       
       final int fileSize = await sourceFile.length();
-      debugPrint('✓ Source file verified: ${fileSize} bytes');
+      debugPrint('✓ Source file verified: $fileSize bytes');
       
       final String originalFileName = path.basename(image.path);
       final String attachmentId = _uuid.v4();
@@ -134,10 +134,10 @@ class MobilePhotoPickerService implements PhotoPickerService {
       final savedFile = await _storageService.getFile(savedPath);
       if (savedFile != null && await savedFile.exists()) {
         final savedSize = await savedFile.length();
-        debugPrint('✓ Saved file verified: ${savedSize} bytes');
+        debugPrint('✓ Saved file verified: $savedSize bytes');
         
         if (savedSize != fileSize) {
-          debugPrint('⚠️ Size mismatch: original ${fileSize} vs saved ${savedSize}');
+          debugPrint('⚠️ Size mismatch: original $fileSize vs saved $savedSize');
         }
       } else {
         debugPrint('❌ Saved file verification failed');
