@@ -35,6 +35,7 @@ class EntryNotifier extends StateNotifier<AsyncValue<List<Entry>>> {
     String? id,
     required String title,
     required String content,
+    DateTime? createdAt,
     List<String>? tags,
     int? rating,
     double? latitude,
@@ -43,13 +44,16 @@ class EntryNotifier extends StateNotifier<AsyncValue<List<Entry>>> {
     List<Attachment>? attachments,
   }) async {
     try {
+      final now = DateTime.now();
+      final entryCreatedAt = createdAt ?? now;
+      
       final entry = Entry(
         id: id ?? _uuid.v4(),
         journalId: _journalId,
         title: title,
         content: content,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        createdAt: entryCreatedAt,
+        updatedAt: now,
         tags: tags ?? [],
         rating: rating,
         latitude: latitude,
@@ -96,6 +100,14 @@ class EntryNotifier extends StateNotifier<AsyncValue<List<Entry>>> {
     return await _databaseService.searchEntries(
       journalId: _journalId,
       query: query,
+    );
+  }
+
+  Future<List<Entry>> getEntriesWithPhotosForDateRange(DateTime startDate, DateTime endDate) async {
+    return await _databaseService.getEntriesWithPhotosForDateRange(
+      journalId: _journalId,
+      startDate: startDate,
+      endDate: endDate,
     );
   }
 

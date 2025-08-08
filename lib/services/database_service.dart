@@ -416,6 +416,46 @@ class DatabaseService {
     return entries;
   }
 
+  // Optimized method to get entries with photo attachments for calendar display
+  Future<List<Entry>> getEntriesWithPhotosForDateRange({
+    required String journalId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final db = await database;
+    
+    // Query entries that have photo attachments within the date range
+    final entryMaps = await db.rawQuery('''
+      SELECT DISTINCT e.* 
+      FROM entries e 
+      INNER JOIN attachments a ON e.id = a.entry_id 
+      WHERE e.journal_id = ? 
+        AND e.created_at >= ? 
+        AND e.created_at <= ? 
+        AND a.type = 'photo'
+      ORDER BY e.created_at DESC
+    ''', [
+      journalId,
+      startDate.millisecondsSinceEpoch,
+      endDate.millisecondsSinceEpoch,
+    ]);
+
+    final List<Entry> entries = [];
+    for (final entryMap in entryMaps) {
+      final attachmentMaps = await db.query(
+        'attachments',
+        where: 'entry_id = ?',
+        whereArgs: [entryMap['id']],
+      );
+      final attachments = attachmentMaps
+          .map((map) => Attachment.fromMap(map))
+          .toList();
+      entries.add(Entry.fromMap(entryMap, attachments: attachments));
+    }
+
+    return entries;
+  }
+
   Future<void> updateEntry(Entry entry) async {
     final db = await database;
     await db.transaction((txn) async {

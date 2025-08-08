@@ -11,6 +11,7 @@ import '../../widgets/attachment_preview.dart';
 
 class EntryEditScreen extends ConsumerStatefulWidget {
   final Entry? entry;
+  final DateTime? initialDate;
   final double? initialLatitude;
   final double? initialLongitude;
   final String? initialLocationName;
@@ -18,6 +19,7 @@ class EntryEditScreen extends ConsumerStatefulWidget {
   const EntryEditScreen({
     super.key, 
     this.entry,
+    this.initialDate,
     this.initialLatitude,
     this.initialLongitude, 
     this.initialLocationName,
@@ -265,6 +267,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
         id: _entryId,
         title: _titleController.text,
         content: _contentController.text,
+        createdAt: widget.initialDate,
         tags: tags,
         rating: _rating,
         latitude: _latitude,
