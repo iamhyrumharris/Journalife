@@ -3,13 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/journal.dart';
 import '../providers/journal_provider.dart';
 import '../screens/journals/journal_list_screen.dart';
+import '../screens/journals/journal_edit_screen.dart';
 
 class JournalSelector extends ConsumerWidget {
   final bool showAllJournals;
+  final bool isAppBarTitle;
 
   const JournalSelector({
     super.key,
     this.showAllJournals = false,
+    this.isAppBarTitle = false,
   });
 
   @override
@@ -53,6 +56,8 @@ class JournalSelector extends ConsumerWidget {
 
         if (showAllJournals) {
           return _buildJournalGrid(context, ref, journals, currentJournal);
+        } else if (isAppBarTitle) {
+          return _buildAppBarTitle(context, ref, journals, currentJournal);
         } else {
           return _buildCompactSelector(context, ref, journals, currentJournal);
         }
@@ -77,6 +82,51 @@ class JournalSelector extends ConsumerWidget {
             onPressed: () => _navigateToJournalManagement(context),
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppBarTitle(
+    BuildContext context,
+    WidgetRef ref,
+    List<Journal> journals,
+    Journal? currentJournal,
+  ) {
+    final effectiveJournal = currentJournal ?? journals.first;
+    
+    // Auto-select first journal if none selected
+    if (currentJournal == null && journals.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(currentJournalProvider.notifier).state = effectiveJournal;
+      });
+    }
+
+    return GestureDetector(
+      onTap: () => _showJournalSwitchModal(context, ref, journals, effectiveJournal),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildJournalIcon(effectiveJournal),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              effectiveJournal.name,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 18,
+                color: Colors.black87,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Icon(
+            Icons.keyboard_arrow_down,
+            color: Colors.black87,
+            size: 20,
           ),
         ],
       ),
@@ -318,6 +368,72 @@ class JournalSelector extends ConsumerWidget {
       context,
       MaterialPageRoute(
         builder: (context) => const JournalListScreen(),
+      ),
+    );
+  }
+
+  void _navigateToJournalCreation(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const JournalEditScreen(), // null journal = create new
+      ),
+    );
+  }
+
+  void _showJournalSwitchModal(BuildContext context, WidgetRef ref, List<Journal> journals, Journal currentJournal) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select Journal',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: journals.map((journal) {
+                  final isSelected = currentJournal.id == journal.id;
+                  
+                  return ListTile(
+                    leading: _buildJournalIcon(journal, size: 24),
+                    title: Text(journal.name),
+                    subtitle: journal.description.isNotEmpty ? Text(journal.description) : null,
+                    trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
+                    onTap: () {
+                      if (!isSelected) {
+                        _selectJournal(ref, journal);
+                      }
+                      Navigator.pop(context);
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline, color: Colors.blue),
+              title: const Text('Create New Journal', style: TextStyle(color: Colors.blue)),
+              onTap: () {
+                Navigator.pop(context);
+                _navigateToJournalCreation(context);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }

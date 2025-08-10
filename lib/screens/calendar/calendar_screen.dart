@@ -20,6 +20,8 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   int _selectedYear = DateTime.now().year;
   DateTime? _selectedDay;
+  DateTime _currentViewedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  final GlobalKey<ScrollableCalendarState> _calendarKey = GlobalKey<ScrollableCalendarState>();
 
   @override
   void initState() {
@@ -34,45 +36,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Calendar'),
+        title: const JournalSelector(isAppBarTitle: true),
         actions: [
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {
               ref.read(journalProvider.notifier).loadJournals();
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.library_books),
-            onPressed: () {
-              Navigator.pushNamed(context, '/journals');
-            },
-            tooltip: 'Manage Journals',
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              switch (value) {
-                case 'migration':
-                  showDialog(
-                    context: context,
-                    builder: (context) => const FileMigrationDialog(),
-                  );
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'migration',
-                child: Row(
-                  children: [
-                    Icon(Icons.drive_file_move, size: 18),
-                    SizedBox(width: 8),
-                    Text('File Migration'),
-                  ],
-                ),
-              ),
-            ],
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -108,14 +79,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             });
           }
 
-          return Column(
-            children: [
-              const JournalSelector(),
-              Expanded(child: _buildScrollableCalendar(effectiveJournal)),
-            ],
-          );
+          return _buildScrollableCalendar(effectiveJournal);
         },
       ),
+      floatingActionButton: _shouldShowJumpButton() ? FloatingActionButton.small(
+        onPressed: _jumpToToday,
+        tooltip: 'Jump to today',
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+        child: const Text(
+          'Today',
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ) : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -167,6 +144,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ),
       ),
       data: (entries) => ScrollableCalendar(
+        key: _calendarKey,
         selectedYear: _selectedYear,
         selectedDay: _selectedDay,
         entries: entries,
@@ -177,7 +155,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           });
         },
         onMonthChanged: (month) {
-          // Month changed callback - can be used for future functionality
+          setState(() {
+            _currentViewedMonth = month;
+          });
         },
       ),
     );
@@ -215,6 +195,30 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ),
       );
     }
+  }
+
+  bool _shouldShowJumpButton() {
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    final viewedMonth = DateTime(_currentViewedMonth.year, _currentViewedMonth.month);
+    
+    // Hide button if we're already viewing the current month
+    return !_isSameMonth(currentMonth, viewedMonth);
+  }
+
+  bool _isSameMonth(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month;
+  }
+
+  void _jumpToToday() {
+    final today = DateTime.now();
+    setState(() {
+      _selectedDay = today;
+      _selectedYear = today.year;
+    });
+    
+    // Scroll calendar to today
+    _calendarKey.currentState?.scrollToDate(today);
   }
 
   void _showCreateJournalDialog() {

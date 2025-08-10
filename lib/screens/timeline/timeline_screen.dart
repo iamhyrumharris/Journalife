@@ -19,20 +19,14 @@ class TimelineScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Timeline'),
+        title: const JournalSelector(isAppBarTitle: true),
         actions: [
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {
               ref.read(journalProvider.notifier).loadJournals();
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.library_books),
-            onPressed: () {
-              Navigator.pushNamed(context, '/journals');
-            },
-            tooltip: 'Manage Journals',
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -70,14 +64,7 @@ class TimelineScreen extends ConsumerWidget {
             });
           }
 
-          return Column(
-            children: [
-              const JournalSelector(),
-              Expanded(
-                child: _buildTimelineView(context, ref, effectiveJournal),
-              ),
-            ],
-          );
+          return _buildTimelineView(context, ref, effectiveJournal);
         },
       ),
     );

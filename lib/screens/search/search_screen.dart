@@ -36,7 +36,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Search'),
+        title: const JournalSelector(isAppBarTitle: true),
         actions: [
           if (_searchResults.isNotEmpty)
             IconButton(
@@ -80,8 +80,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
           return Column(
             children: [
-              const JournalSelector(),
-              
               // Search bar
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),

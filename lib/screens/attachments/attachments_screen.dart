@@ -40,13 +40,14 @@ class _AttachmentsScreenState extends ConsumerState<AttachmentsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Attachments'),
+        title: const JournalSelector(isAppBarTitle: true),
         actions: [
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {
               ref.read(journalProvider.notifier).loadJournals();
             },
+            tooltip: 'Refresh',
           ),
         ],
         bottom: TabBar(
@@ -93,21 +94,14 @@ class _AttachmentsScreenState extends ConsumerState<AttachmentsScreen>
             });
           }
 
-          return Column(
+          return TabBarView(
+            controller: _tabController,
             children: [
-              const JournalSelector(),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildAttachmentsView(ref, effectiveJournal, null),
-                    _buildAttachmentsView(ref, effectiveJournal, AttachmentType.photo),
-                    _buildAttachmentsView(ref, effectiveJournal, AttachmentType.photo), // Videos would be photos with video mime types
-                    _buildAttachmentsView(ref, effectiveJournal, AttachmentType.audio),
-                    _buildAttachmentsView(ref, effectiveJournal, AttachmentType.file),
-                  ],
-                ),
-              ),
+              _buildAttachmentsView(ref, effectiveJournal, null),
+              _buildAttachmentsView(ref, effectiveJournal, AttachmentType.photo),
+              _buildAttachmentsView(ref, effectiveJournal, AttachmentType.photo), // Videos would be photos with video mime types
+              _buildAttachmentsView(ref, effectiveJournal, AttachmentType.audio),
+              _buildAttachmentsView(ref, effectiveJournal, AttachmentType.file),
             ],
           );
         },

@@ -33,7 +33,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Map'),
+        title: const JournalSelector(isAppBarTitle: true),
         actions: [
           IconButton(
             icon: const Icon(Icons.my_location),
@@ -45,6 +45,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             onPressed: () {
               ref.read(journalProvider.notifier).loadJournals();
             },
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -80,14 +81,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             });
           }
 
-          return Column(
-            children: [
-              const JournalSelector(),
-              Expanded(
-                child: _buildMapView(ref, effectiveJournal),
-              ),
-            ],
-          );
+          return _buildMapView(ref, effectiveJournal);
         },
       ),
     );

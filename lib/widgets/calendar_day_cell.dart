@@ -31,11 +31,13 @@ class CalendarDayCell extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.all(1),
         decoration: BoxDecoration(
           border: isSelected 
               ? Border.all(color: Theme.of(context).primaryColor, width: 2)
-              : null,
+              : Border.all(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  width: 1.0,
+                ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: ClipRRect(
