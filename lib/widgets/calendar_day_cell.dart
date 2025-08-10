@@ -214,6 +214,11 @@ class CalendarDayCell extends StatelessWidget {
   Widget _buildDayNumberOverlay(BuildContext context) {
     final hasPhotos = _getPhotoAttachments().isNotEmpty;
     
+    // Don't show day numbers for non-current-month days
+    if (!isCurrentMonth) {
+      return const SizedBox.shrink();
+    }
+    
     return Positioned(
       top: 4,
       left: 4,
@@ -234,9 +239,7 @@ class CalendarDayCell extends StatelessWidget {
                   ? Colors.white
                   : (isToday 
                       ? Colors.white 
-                      : (isCurrentMonth 
-                          ? Theme.of(context).textTheme.bodyMedium?.color
-                          : Colors.grey)),
+                      : Theme.of(context).textTheme.bodyMedium?.color),
               fontSize: 12,
               fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
             ),

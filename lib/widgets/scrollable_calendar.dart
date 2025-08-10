@@ -29,37 +29,21 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   late ScrollController _scrollController;
   late DateTime _currentMonth;
   final double _bannerHeight = 40.0; // Height of month banner (padding + text)
-  final double _weekRowHeight = 80.0; // Height per week row
-  
-  // Calculate dynamic height based on number of weeks needed for each month
-  double _getMonthHeight(DateTime month) {
-    final weeksNeeded = _getWeeksNeeded(month);
-    return weeksNeeded * _weekRowHeight;
-  }
-  
-  double _getTotalMonthHeight(DateTime month) {
-    return _getMonthHeight(month) + _bannerHeight;
-  }
+  // Grid/spacing constants
+  static const double _gridMainAxisSpacing = 4.0; // Must match GridView mainAxisSpacing
+  static const double _horizontalPadding = 16.0; // Must match container padding
+
+  // These are computed at layout-time based on available width
+  double _monthItemExtent = 0;
+  double _rowHeight = 0; // Square cell size based on width
+  double? _viewportHeight; // For centering month within viewport
+  bool _didInitialCenter = false; // Prevent auto-centering on resize
   
   // Use current year as base date for more accurate calculations
   late final DateTime _baseDate;
   final int _centerOffset = 600; // Center point for infinite scrolling
   
-  // Calculate how many weeks are needed for a month
-  int _getWeeksNeeded(DateTime month) {
-    final firstDayOfMonth = DateTime(month.year, month.month, 1);
-    final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
-    final daysInMonth = lastDayOfMonth.day;
-    
-    // Calculate first day of week (0 = Sunday, 1 = Monday, etc.)
-    final firstDayOfWeek = firstDayOfMonth.weekday == 7 ? 0 : firstDayOfMonth.weekday;
-    
-    // Calculate total cells needed
-    final totalCells = firstDayOfWeek + daysInMonth;
-    
-    // Calculate weeks needed (round up to nearest week)
-    return (totalCells / 7).ceil();
-  }
+  // (Fixed-height mode active; helper not used)
 
   @override
   void initState() {
@@ -68,17 +52,14 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     _currentMonth = DateTime(now.year, now.month);
     _baseDate = DateTime(2020, 1); // Keep stable base date
     
-    // Calculate where current month should be and scroll there
-    final currentMonthIndex = _getMonthIndex(_currentMonth);
-    final approximateHeight = _weekRowHeight * 5 + _bannerHeight;
-    final currentMonthPosition = currentMonthIndex * approximateHeight;
-    
     _scrollController = ScrollController(
-      initialScrollOffset: currentMonthPosition, // Start at current month position
+      // Will center after first layout when true extents are known
+      initialScrollOffset: 0,
     );
     
     // Add scroll listener for month change detection
     _scrollController.addListener(_onScroll);
+    // Do not auto-center here; we will center once after first layout within build when rowHeight is known
   }
 
   @override
@@ -127,10 +108,9 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   }
 
   void _onScroll() {
-    if (_scrollController.hasClients) {
+    if (_scrollController.hasClients && _monthItemExtent > 0) {
       final scrollOffset = _scrollController.offset;
-      final approximateHeight = _weekRowHeight * 5 + _bannerHeight;
-      final monthIndex = (scrollOffset / approximateHeight).round();
+      final monthIndex = (scrollOffset / _monthItemExtent).round();
       final month = _getMonthForIndex(monthIndex);
       
       if (month.month != _currentMonth.month || month.year != _currentMonth.year) {
@@ -142,36 +122,33 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     }
   }
 
-  // Public method to scroll to a specific date
+  // Public method to center on a specific date's month (no animation)
   void scrollToDate(DateTime targetDate) {
     if (!_scrollController.hasClients) return;
-    
     final targetMonth = DateTime(targetDate.year, targetDate.month);
-    final currentScrollMonth = _currentMonth;
-    
-    // Calculate how many months to move from current position
-    final monthsDifference = (targetMonth.year - currentScrollMonth.year) * 12 + 
-                            (targetMonth.month - currentScrollMonth.month);
-    
-    if (monthsDifference == 0) return; // Already at target month
-    
-    // Calculate approximate offset change needed
-    final approximateHeight = _weekRowHeight * 5 + _bannerHeight;
-    final currentOffset = _scrollController.offset;
-    final targetOffset = currentOffset + (monthsDifference * approximateHeight);
-    
-    _scrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOut,
-    );
-    
-    // Update current month and trigger callback
-    setState(() {
-      _currentMonth = targetMonth;
-    });
-    widget.onMonthChanged(_currentMonth);
+    _centerOnMonth(targetMonth);
   }
+
+  void _centerOnMonth(DateTime month) {
+    if (!_scrollController.hasClients || _monthItemExtent <= 0) return;
+    final index = _getMonthIndex(month);
+    double offset = index * _monthItemExtent;
+    if (_viewportHeight != null) {
+      final extra = _viewportHeight! - _monthItemExtent;
+      if (extra > 0) offset -= extra / 2;
+    }
+    final pos = _scrollController.position;
+    _scrollController.jumpTo(offset.clamp(pos.minScrollExtent, pos.maxScrollExtent));
+
+    if (month.month != _currentMonth.month || month.year != _currentMonth.year) {
+      setState(() {
+        _currentMonth = month;
+      });
+      widget.onMonthChanged(month);
+    }
+  }
+
+  // Removed variable-height helpers for macOS stability
 
 
   @override
@@ -180,20 +157,43 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
       children: [
         _buildWeekdayHeaders(context),
         Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            scrollDirection: Axis.vertical,
-            itemCount: _centerOffset * 2, // Provide reasonable range (2020-2070)
-            itemBuilder: (context, index) {
-              final month = _getMonthForIndex(index);
-              return Column(
-                children: [
-                  _buildMonthBanner(context, month),
-                  SizedBox(
-                    height: _getMonthHeight(month),
-                    child: _buildMonthGrid(context, month),
-                  ),
-                ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              _viewportHeight = constraints.maxHeight;
+              // Compute fixed month extent (banner + 6 rows) based on width for stable scrolling
+              final availableWidth = constraints.maxWidth - (_horizontalPadding * 2);
+              final cellWidth = (availableWidth - _gridMainAxisSpacing * (7 - 1)) / 7.0;
+              _rowHeight = cellWidth; // childAspectRatio is 1.0
+              final fullGridHeight = (_rowHeight * 6) + (_gridMainAxisSpacing * 5);
+              _monthItemExtent = _bannerHeight + fullGridHeight;
+
+              // Center exactly once after first layout with valid row height
+              if (!_didInitialCenter) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && _scrollController.hasClients) {
+                    _centerOnMonth(_currentMonth);
+                    _didInitialCenter = true;
+                  }
+                });
+              }
+
+              return ListView.builder(
+                controller: _scrollController,
+                scrollDirection: Axis.vertical,
+                itemExtent: _monthItemExtent,
+                itemCount: _centerOffset * 2, // Provide reasonable range (2020-2070)
+                itemBuilder: (context, index) {
+                  final month = _getMonthForIndex(index);
+                  return Column(
+                    children: [
+                      _buildMonthBanner(context, month),
+                      SizedBox(
+                        height: fullGridHeight,
+                        child: _buildMonthGrid(context, month),
+                      ),
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -228,9 +228,9 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   }
 
   Widget _buildMonthBanner(BuildContext context, DateTime month) {
-    return Container(
+    return SizedBox(
+      height: _bannerHeight,
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Center(
         child: Text(
           DateFormat('MMMM yyyy').format(month),
@@ -248,40 +248,44 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     final firstDayOfMonth = DateTime(month.year, month.month, 1);
     final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
     final daysInMonth = lastDayOfMonth.day;
-    
-    // Calculate first day of week (0 = Sunday, 1 = Monday, etc.)
+
+    // 0 = Sunday, ... 6 = Saturday
     final firstDayOfWeek = firstDayOfMonth.weekday == 7 ? 0 : firstDayOfMonth.weekday;
-    
-    
+
     final cells = <Widget>[];
-    
-    // Add empty cells for previous month days
-    for (int i = 0; i < firstDayOfWeek; i++) {
-      cells.add(_buildEmptyCell(context));
+
+    // Leading days from previous month to fill the first week
+    final prevMonth = DateTime(month.year, month.month - 1, 1);
+    final prevMonthLastDay = DateTime(prevMonth.year, prevMonth.month + 1, 0).day;
+    for (int i = firstDayOfWeek - 1; i >= 0; i--) {
+      final day = prevMonthLastDay - i;
+      final date = DateTime(prevMonth.year, prevMonth.month, day);
+      cells.add(_buildDayCell(context, date, false, month));
     }
-    
-    // Add current month days
+
+    // Current month days
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(month.year, month.month, day);
       cells.add(_buildDayCell(context, date, true, month));
     }
-    
-    // Calculate how many weeks we need and fill to complete those weeks only
-    final weeksNeeded = _getWeeksNeeded(month);
-    final totalCells = weeksNeeded * 7;
-    final remainingCells = totalCells - cells.length;
-    for (int i = 0; i < remainingCells; i++) {
-      cells.add(_buildEmptyCell(context));
+
+    // Trailing days from next month to complete 6 weeks (42 cells)
+    const targetCells = 42; // 6 weeks * 7
+    final nextMonth = DateTime(month.year, month.month + 1, 1);
+    int trailingDay = 1;
+    while (cells.length < targetCells) {
+      final date = DateTime(nextMonth.year, nextMonth.month, trailingDay++);
+      cells.add(_buildDayCell(context, date, false, month));
     }
-    
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
       child: GridView.count(
         crossAxisCount: 7,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         childAspectRatio: 1,
-        mainAxisSpacing: 4,
+        mainAxisSpacing: _gridMainAxisSpacing,
         crossAxisSpacing: 4,
         children: cells,
       ),
@@ -298,11 +302,13 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
       isCurrentMonth: isCurrentMonth,
       isSelected: isSelected,
       isToday: isToday,
-      entries: dayEntries,
+      entries: isCurrentMonth ? dayEntries : const [],
       onTap: () => widget.onDaySelected(date),
     );
   }
 
+  // Kept for clarity; used during leading/trailing fill generation if needed in the future
+  // ignore: unused_element
   Widget _buildEmptyCell(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
