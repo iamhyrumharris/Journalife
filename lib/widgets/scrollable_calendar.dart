@@ -38,6 +38,7 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   double _rowHeight = 0; // Square cell size based on width
   double? _viewportHeight; // For centering month within viewport
   bool _didInitialCenter = false; // Prevent auto-centering on resize
+  bool _isAdjustingForResize = false; // Prevent scroll listener interference during resize
   
   // Use current year as base date for more accurate calculations
   late final DateTime _baseDate;
@@ -108,17 +109,20 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   }
 
   void _onScroll() {
-    if (_scrollController.hasClients && _monthItemExtent > 0) {
-      final scrollOffset = _scrollController.offset;
-      final monthIndex = (scrollOffset / _monthItemExtent).round();
-      final month = _getMonthForIndex(monthIndex);
-      
-      if (month.month != _currentMonth.month || month.year != _currentMonth.year) {
-        setState(() {
-          _currentMonth = month;
-        });
-        widget.onMonthChanged(month);
-      }
+    // Don't update current month during resize adjustments
+    if (_isAdjustingForResize || !_scrollController.hasClients || _monthItemExtent <= 0) {
+      return;
+    }
+    
+    final scrollOffset = _scrollController.offset;
+    final monthIndex = (scrollOffset / _monthItemExtent).round();
+    final month = _getMonthForIndex(monthIndex);
+    
+    if (month.month != _currentMonth.month || month.year != _currentMonth.year) {
+      setState(() {
+        _currentMonth = month;
+      });
+      widget.onMonthChanged(month);
     }
   }
 
@@ -165,7 +169,29 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
               final cellWidth = (availableWidth - _gridMainAxisSpacing * (7 - 1)) / 7.0;
               _rowHeight = cellWidth; // childAspectRatio is 1.0
               final fullGridHeight = (_rowHeight * 6) + (_gridMainAxisSpacing * 5);
-              _monthItemExtent = _bannerHeight + fullGridHeight;
+              final newMonthItemExtent = _bannerHeight + fullGridHeight;
+
+              // Handle resize: preserve current month position when extent changes
+              if (_didInitialCenter && _monthItemExtent > 0 && newMonthItemExtent != _monthItemExtent && _scrollController.hasClients) {
+                final currentIndex = _getMonthIndex(_currentMonth);
+                _isAdjustingForResize = true;
+                _monthItemExtent = newMonthItemExtent;
+                
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && _scrollController.hasClients) {
+                    double offset = currentIndex * _monthItemExtent;
+                    if (_viewportHeight != null) {
+                      final extra = _viewportHeight! - _monthItemExtent;
+                      if (extra > 0) offset -= extra / 2;
+                    }
+                    final pos = _scrollController.position;
+                    _scrollController.jumpTo(offset.clamp(pos.minScrollExtent, pos.maxScrollExtent));
+                    _isAdjustingForResize = false;
+                  }
+                });
+              } else {
+                _monthItemExtent = newMonthItemExtent;
+              }
 
               // Center exactly once after first layout with valid row height
               if (!_didInitialCenter) {
