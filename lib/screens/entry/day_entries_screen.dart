@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../models/entry.dart';
 import '../../providers/entry_provider.dart';
 import '../../providers/journal_provider.dart';
-import 'entry_view_screen.dart';
 import 'entry_edit_screen.dart';
 
 class DayEntriesScreen extends ConsumerWidget {
@@ -313,7 +312,7 @@ class DayEntriesScreen extends ConsumerWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EntryViewScreen(entry: entry),
+        builder: (context) => EntryEditScreen(entry: entry),
       ),
     );
   }

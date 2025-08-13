@@ -7,7 +7,7 @@ import '../../providers/journal_provider.dart';
 import '../../providers/entry_provider.dart';
 import '../../widgets/journal_selector.dart';
 import '../../widgets/attachment_thumbnail.dart';
-import '../entry/entry_view_screen.dart';
+import '../entry/entry_edit_screen.dart';
 
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
@@ -235,7 +235,7 @@ class TimelineScreen extends ConsumerWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => EntryViewScreen(entry: entry),
+              builder: (context) => EntryEditScreen(entry: entry),
             ),
           );
         },

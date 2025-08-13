@@ -7,7 +7,7 @@ import '../../providers/journal_provider.dart';
 import '../../providers/entry_provider.dart';
 import '../../services/media_service.dart';
 import '../../widgets/journal_selector.dart';
-import '../entry/entry_view_screen.dart';
+import '../entry/entry_edit_screen.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -204,7 +204,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => EntryViewScreen(entry: entry),
+                  builder: (context) => EntryEditScreen(entry: entry),
                 ),
               );
             },
