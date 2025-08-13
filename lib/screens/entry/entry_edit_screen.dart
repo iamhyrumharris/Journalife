@@ -135,7 +135,10 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
         scrolledUnderElevation: 1,
         surfaceTintColor: colorScheme.surface,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            _saveEntryIfNotBlank();
+            Navigator.pop(context);
+          },
           icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
         ),
         title: Text(
@@ -424,8 +427,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
             attachments: _attachments,
           );
     }
-
-    Navigator.pop(context);
   }
 
   void _getCurrentLocation() async {

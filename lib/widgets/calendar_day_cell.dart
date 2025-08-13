@@ -67,12 +67,12 @@ class CalendarDayCell extends StatelessWidget {
         else
           _buildMultiplePhotos(photos),
         
-        // Day number overlay
-        _buildDayNumberOverlay(context),
+        // Day number centered
+        _buildCenteredDayNumber(context),
         
-        // Entry count indicator  
+        // Entry dots indicator  
         if (entries.isNotEmpty)
-          _buildEntryCountIndicator(context),
+          _buildEntryDotsIndicator(context),
         
         // Today highlight
         if (isToday && !isSelected)
@@ -201,9 +201,9 @@ class CalendarDayCell extends StatelessWidget {
           : Colors.grey.withValues(alpha: 0.1),
       child: Stack(
         children: [
-          _buildDayNumberOverlay(context),
+          _buildCenteredDayNumber(context),
           if (entries.isNotEmpty)
-            _buildEntryCountIndicator(context),
+            _buildEntryDotsIndicator(context),
           if (isToday && !isSelected)
             _buildTodayHighlight(context),
         ],
@@ -211,7 +211,7 @@ class CalendarDayCell extends StatelessWidget {
     );
   }
 
-  Widget _buildDayNumberOverlay(BuildContext context) {
+  Widget _buildCenteredDayNumber(BuildContext context) {
     final hasPhotos = _getPhotoAttachments().isNotEmpty;
     
     // Don't show day numbers for non-current-month days
@@ -219,15 +219,13 @@ class CalendarDayCell extends StatelessWidget {
       return const SizedBox.shrink();
     }
     
-    return Positioned(
-      top: 4,
-      left: 4,
+    return Center(
       child: Container(
-        width: 24,
-        height: 24,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
           color: hasPhotos 
-              ? Colors.black.withValues(alpha: 0.6)
+              ? Colors.black.withValues(alpha: 0.7)
               : (isToday && isSelected 
                   ? Theme.of(context).primaryColor 
                   : (isToday ? Theme.of(context).primaryColor.withValues(alpha: 0.3) : Colors.transparent)),
@@ -244,8 +242,8 @@ class CalendarDayCell extends StatelessWidget {
                       : (isToday 
                           ? Theme.of(context).primaryColor
                           : Theme.of(context).textTheme.bodyMedium?.color)),
-              fontSize: 12,
-              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+              fontSize: 14,
+              fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
             ),
           ),
         ),
@@ -253,39 +251,58 @@ class CalendarDayCell extends StatelessWidget {
     );
   }
 
-  Widget _buildEntryCountIndicator(BuildContext context) {
+  Widget _buildEntryDotsIndicator(BuildContext context) {
     final entryCount = entries.length;
+    if (entryCount == 0) return const SizedBox.shrink();
+    
+    // Determine number of dots to show (max 3)
+    final dotsToShow = entryCount > 3 ? 3 : entryCount;
+    final showPlus = entryCount > 3;
     
     return Positioned(
       bottom: 4,
       right: 4,
       child: Container(
-        padding: const EdgeInsets.all(4),
-        constraints: const BoxConstraints(
-          minWidth: 18,
-          minHeight: 18,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor,
-          shape: BoxShape.circle,
+          color: Colors.black.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 2,
               offset: const Offset(0, 1),
             ),
           ],
         ),
-        child: Center(
-          child: Text(
-            entryCount > 99 ? '99+' : '$entryCount',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Show dots
+            for (int i = 0; i < dotsToShow; i++) ...[
+              if (i > 0) const SizedBox(width: 3),
+              Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+            // Show + if more than 3 entries
+            if (showPlus) ...[
+              const SizedBox(width: 3),
+              const Text(
+                '+',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

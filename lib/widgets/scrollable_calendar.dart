@@ -30,8 +30,8 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   late DateTime _currentMonth;
   final double _bannerHeight = 40.0; // Height of month banner (padding + text)
   // Grid/spacing constants
-  static const double _gridMainAxisSpacing = 4.0; // Must match GridView mainAxisSpacing
-  static const double _horizontalPadding = 16.0; // Must match container padding
+  static const double _gridMainAxisSpacing = 1.0; // Must match GridView mainAxisSpacing
+  static const double _horizontalPadding = 4.0; // Must match container padding
 
   // These are computed at layout-time based on available width
   double _monthItemExtent = 0;
@@ -233,7 +233,7 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: weekdays.map((day) => Expanded(
           child: Container(
@@ -312,7 +312,7 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
         physics: const NeverScrollableScrollPhysics(),
         childAspectRatio: 1,
         mainAxisSpacing: _gridMainAxisSpacing,
-        crossAxisSpacing: 4,
+        crossAxisSpacing: 1,
         children: cells,
       ),
     );
