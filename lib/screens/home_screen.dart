@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../services/error_service.dart';
 import 'calendar/calendar_screen.dart';
 import 'timeline/timeline_screen.dart';
+import 'reflect/reflect_screen.dart';
 import 'map/map_screen.dart';
 import 'attachments/attachments_screen.dart';
-import 'search/search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,9 +19,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const CalendarScreen(),
     const TimelineScreen(),
+    const ReflectScreen(),
     const MapScreen(),
     const AttachmentsScreen(),
-    const SearchScreen(),
   ];
 
   @override
@@ -49,16 +49,16 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Timeline',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.book),
+            label: 'Reflect',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.map),
             label: 'Map',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.attachment),
             label: 'Attachments',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
           ),
         ],
       ),

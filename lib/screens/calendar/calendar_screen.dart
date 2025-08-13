@@ -9,6 +9,9 @@ import '../../widgets/file_migration_dialog.dart';
 import '../../widgets/scrollable_calendar.dart';
 import '../entry/entry_edit_screen.dart';
 import '../entry/day_entries_screen.dart';
+import '../settings/settings_screen.dart';
+import '../profile/profile_screen.dart';
+import '../../widgets/search_overlay.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -36,14 +39,44 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const JournalSelector(isAppBarTitle: true),
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 8),
+          child: JournalSelector(isAppBarTitle: true),
+        ),
+        leadingWidth: 200,
+        title: const Text('Calendar'),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.sync),
+            icon: const Icon(Icons.search),
             onPressed: () {
-              ref.read(journalProvider.notifier).loadJournals();
+              showSearchOverlay(context);
             },
-            tooltip: 'Refresh',
+            tooltip: 'Search',
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Settings',
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProfileScreen(),
+                ),
+              );
+            },
+            tooltip: 'Profile',
           ),
         ],
       ),

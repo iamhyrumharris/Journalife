@@ -8,6 +8,9 @@ import '../../providers/entry_provider.dart';
 import '../../services/media_service.dart';
 import '../../widgets/journal_selector.dart';
 import '../entry/entry_edit_screen.dart';
+import '../settings/settings_screen.dart';
+import '../profile/profile_screen.dart';
+import '../../widgets/search_overlay.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -33,7 +36,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const JournalSelector(isAppBarTitle: true),
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 8),
+          child: JournalSelector(isAppBarTitle: true),
+        ),
+        leadingWidth: 200,
+        title: const Text('Map'),
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.my_location),
@@ -41,11 +50,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             tooltip: 'Go to current location',
           ),
           IconButton(
-            icon: const Icon(Icons.sync),
+            icon: const Icon(Icons.search),
             onPressed: () {
-              ref.read(journalProvider.notifier).loadJournals();
+              showSearchOverlay(context);
             },
-            tooltip: 'Refresh',
+            tooltip: 'Search',
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Settings',
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProfileScreen(),
+                ),
+              );
+            },
+            tooltip: 'Profile',
           ),
         ],
       ),

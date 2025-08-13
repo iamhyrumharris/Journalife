@@ -36,7 +36,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const JournalSelector(isAppBarTitle: true),
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 8),
+          child: JournalSelector(isAppBarTitle: true),
+        ),
+        leadingWidth: 200,
+        title: const Text('Search'),
+        centerTitle: true,
         actions: [
           if (_searchResults.isNotEmpty)
             IconButton(

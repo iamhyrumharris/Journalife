@@ -70,12 +70,12 @@ class CalendarDayCell extends StatelessWidget {
         // Day number overlay
         _buildDayNumberOverlay(context),
         
-        // Non-photo entry indicator
-        if (hasNonPhotoEntries)
-          _buildEntryIndicator(context),
+        // Entry count indicator  
+        if (entries.isNotEmpty)
+          _buildEntryCountIndicator(context),
         
         // Today highlight
-        if (isToday)
+        if (isToday && !isSelected)
           _buildTodayHighlight(context),
       ],
     );
@@ -197,14 +197,14 @@ class CalendarDayCell extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       color: isCurrentMonth 
-          ? (isToday ? Colors.blue.withValues(alpha: 0.1) : Colors.transparent)
+          ? (isToday ? Colors.blue.withValues(alpha: 0.15) : Colors.transparent)
           : Colors.grey.withValues(alpha: 0.1),
       child: Stack(
         children: [
           _buildDayNumberOverlay(context),
-          if (hasEntries)
-            _buildEntryIndicator(context),
-          if (isToday)
+          if (entries.isNotEmpty)
+            _buildEntryCountIndicator(context),
+          if (isToday && !isSelected)
             _buildTodayHighlight(context),
         ],
       ),
@@ -228,7 +228,9 @@ class CalendarDayCell extends StatelessWidget {
         decoration: BoxDecoration(
           color: hasPhotos 
               ? Colors.black.withValues(alpha: 0.6)
-              : (isToday ? Theme.of(context).primaryColor : Colors.transparent),
+              : (isToday && isSelected 
+                  ? Theme.of(context).primaryColor 
+                  : (isToday ? Theme.of(context).primaryColor.withValues(alpha: 0.3) : Colors.transparent)),
           shape: BoxShape.circle,
         ),
         child: Center(
@@ -237,9 +239,11 @@ class CalendarDayCell extends StatelessWidget {
             style: TextStyle(
               color: hasPhotos 
                   ? Colors.white
-                  : (isToday 
+                  : (isToday && isSelected
                       ? Colors.white 
-                      : Theme.of(context).textTheme.bodyMedium?.color),
+                      : (isToday 
+                          ? Theme.of(context).primaryColor
+                          : Theme.of(context).textTheme.bodyMedium?.color)),
               fontSize: 12,
               fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
             ),
@@ -249,16 +253,39 @@ class CalendarDayCell extends StatelessWidget {
     );
   }
 
-  Widget _buildEntryIndicator(BuildContext context) {
+  Widget _buildEntryCountIndicator(BuildContext context) {
+    final entryCount = entries.length;
+    
     return Positioned(
       bottom: 4,
-      left: 4,
+      right: 4,
       child: Container(
-        width: 6,
-        height: 6,
+        padding: const EdgeInsets.all(4),
+        constraints: const BoxConstraints(
+          minWidth: 18,
+          minHeight: 18,
+        ),
         decoration: BoxDecoration(
           color: Theme.of(context).primaryColor,
           shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            entryCount > 99 ? '99+' : '$entryCount',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
     );

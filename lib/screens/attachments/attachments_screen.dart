@@ -9,6 +9,9 @@ import '../../providers/entry_provider.dart';
 import '../../services/attachment_service.dart';
 import '../../widgets/journal_selector.dart';
 import '../entry/entry_edit_screen.dart';
+import '../settings/settings_screen.dart';
+import '../profile/profile_screen.dart';
+import '../../widgets/search_overlay.dart';
 
 class AttachmentsScreen extends ConsumerStatefulWidget {
   const AttachmentsScreen({super.key});
@@ -40,14 +43,44 @@ class _AttachmentsScreenState extends ConsumerState<AttachmentsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const JournalSelector(isAppBarTitle: true),
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 8),
+          child: JournalSelector(isAppBarTitle: true),
+        ),
+        leadingWidth: 200,
+        title: const Text('Attachments'),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.sync),
+            icon: const Icon(Icons.search),
             onPressed: () {
-              ref.read(journalProvider.notifier).loadJournals();
+              showSearchOverlay(context);
             },
-            tooltip: 'Refresh',
+            tooltip: 'Search',
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Settings',
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProfileScreen(),
+                ),
+              );
+            },
+            tooltip: 'Profile',
           ),
         ],
         bottom: TabBar(

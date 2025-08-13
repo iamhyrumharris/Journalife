@@ -4,6 +4,7 @@ import '../models/journal.dart';
 import '../providers/journal_provider.dart';
 import '../screens/journals/journal_list_screen.dart';
 import '../screens/journals/journal_edit_screen.dart';
+import '../screens/journals/journal_settings_screen.dart';
 
 class JournalSelector extends ConsumerWidget {
   final bool showAllJournals;
@@ -108,15 +109,13 @@ class JournalSelector extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildJournalIcon(effectiveJournal),
+          _buildJournalIcon(effectiveJournal, size: 24),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               effectiveJournal.name,
-              style: const TextStyle(
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                fontSize: 18,
-                color: Colors.black87,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -125,8 +124,7 @@ class JournalSelector extends ConsumerWidget {
           const SizedBox(width: 4),
           const Icon(
             Icons.keyboard_arrow_down,
-            color: Colors.black87,
-            size: 20,
+            size: 18,
           ),
         ],
       ),
@@ -381,6 +379,15 @@ class JournalSelector extends ConsumerWidget {
     );
   }
 
+  void _navigateToJournalSettings(BuildContext context, Journal journal) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => JournalSettingsScreen(journal: journal),
+      ),
+    );
+  }
+
   void _showJournalSwitchModal(BuildContext context, WidgetRef ref, List<Journal> journals, Journal currentJournal) {
     showModalBottomSheet(
       context: context,
@@ -411,7 +418,21 @@ class JournalSelector extends ConsumerWidget {
                     leading: _buildJournalIcon(journal, size: 24),
                     title: Text(journal.name),
                     subtitle: journal.description.isNotEmpty ? Text(journal.description) : null,
-                    trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.settings, size: 20),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _navigateToJournalSettings(context, journal);
+                          },
+                          tooltip: 'Journal Settings',
+                        ),
+                        const SizedBox(width: 8),
+                        if (isSelected) const Icon(Icons.check, color: Colors.blue),
+                      ],
+                    ),
                     onTap: () {
                       if (!isSelected) {
                         _selectJournal(ref, journal);
