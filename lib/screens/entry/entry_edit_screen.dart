@@ -8,7 +8,6 @@ import '../../providers/entry_provider.dart';
 import '../../providers/journal_provider.dart';
 import '../../services/media_service.dart';
 import '../../widgets/audio_recorder_widget.dart';
-import '../../widgets/attachment_preview.dart';
 
 class EntryEditScreen extends ConsumerStatefulWidget {
   final Entry? entry;
@@ -35,6 +34,11 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
   final _contentController = TextEditingController();
   final _tagsController = TextEditingController();
   final _locationController = TextEditingController();
+  
+  final _titleFocusNode = FocusNode();
+  final _contentFocusNode = FocusNode();
+  
+  bool _isTextFieldFocused = false;
 
   int? _rating;
   double? _latitude;
@@ -53,6 +57,10 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
 
     // Initialize consistent entry ID for this editing session
     _entryId = widget.entry?.id ?? _uuid.v4();
+
+    // Add focus listeners
+    _titleFocusNode.addListener(_onFocusChange);
+    _contentFocusNode.addListener(_onFocusChange);
 
     if (_isEditing) {
       final entry = widget.entry!;
@@ -76,12 +84,25 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     }
   }
 
+  void _onFocusChange() {
+    setState(() {
+      _isTextFieldFocused = _titleFocusNode.hasFocus || _contentFocusNode.hasFocus;
+    });
+  }
+
+  Future<bool> _onWillPop() async {
+    _saveEntryIfNotBlank();
+    return true;
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
     _contentController.dispose();
     _tagsController.dispose();
     _locationController.dispose();
+    _titleFocusNode.dispose();
+    _contentFocusNode.dispose();
     super.dispose();
   }
 
@@ -104,7 +125,9 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     final dateFormatter = DateFormat('E, MMM d, yyyy h:mm a');
     final formattedDate = dateFormatter.format(now);
 
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
@@ -124,30 +147,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
           ),
         ),
         centerTitle: false,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: ElevatedButton(
-              onPressed: _saveEntry,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: const Text(
-                'Done',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -233,6 +232,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                     // Title TextField
                     TextField(
                       controller: _titleController,
+                      focusNode: _titleFocusNode,
                       style: TextStyle(
                         color: colorScheme.onSurface,
                         fontSize: 32,
@@ -261,6 +261,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                     // Body TextField
                     TextField(
                       controller: _contentController,
+                      focusNode: _contentFocusNode,
                       style: TextStyle(
                         color: colorScheme.onSurface,
                         fontSize: 18,
@@ -291,8 +292,8 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
               ),
             ),
 
-            // Bottom action row
-            if (keyboardHeight > 0)
+            // Bottom action row - show when text fields are not focused (clean writing experience)
+            if (!_isTextFieldFocused)
               Container(
                 padding: EdgeInsets.only(
                   left: 20,
@@ -311,14 +312,15 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                 ),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => FocusScope.of(context).unfocus(),
-                      icon: Icon(
-                        Icons.keyboard_arrow_down,
-                        color: colorScheme.onSurface.withOpacity(0.6),
-                        size: 24,
+                    if (keyboardHeight > 0)
+                      IconButton(
+                        onPressed: () => FocusScope.of(context).unfocus(),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: colorScheme.onSurface.withOpacity(0.6),
+                          size: 24,
+                        ),
                       ),
-                    ),
                     const Spacer(),
                     IconButton(
                       onPressed: _addPhoto,
@@ -352,7 +354,21 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
           ],
         ),
       ),
+    ),
     );
+  }
+
+  void _saveEntryIfNotBlank() {
+    // Check if entry is completely blank
+    final titleText = _titleController.text.trim();
+    final contentText = _contentController.text.trim();
+    
+    if (titleText.isEmpty && contentText.isEmpty && _attachments.isEmpty) {
+      // Don't save blank entries
+      return;
+    }
+    
+    _saveEntry();
   }
 
   void _saveEntry() {
