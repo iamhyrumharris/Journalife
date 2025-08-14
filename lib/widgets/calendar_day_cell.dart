@@ -220,32 +220,18 @@ class CalendarDayCell extends StatelessWidget {
     }
     
     return Center(
-      child: Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
+      child: Text(
+        '$dayNumber',
+        style: TextStyle(
           color: hasPhotos 
-              ? Colors.black.withValues(alpha: 0.7)
-              : (isToday && isSelected 
-                  ? Theme.of(context).primaryColor 
-                  : (isToday ? Theme.of(context).primaryColor.withValues(alpha: 0.3) : Colors.transparent)),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Text(
-            '$dayNumber',
-            style: TextStyle(
-              color: hasPhotos 
-                  ? Colors.white
-                  : (isToday && isSelected
-                      ? Colors.white 
-                      : (isToday 
-                          ? Theme.of(context).primaryColor
-                          : Theme.of(context).textTheme.bodyMedium?.color)),
-              fontSize: 14,
-              fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
-            ),
-          ),
+              ? Colors.white
+              : (isSelected
+                  ? Colors.black
+                  : (isToday 
+                      ? Theme.of(context).primaryColor
+                      : Theme.of(context).textTheme.bodyMedium?.color)),
+          fontSize: 14,
+          fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w600,
         ),
       ),
     );
@@ -260,49 +246,48 @@ class CalendarDayCell extends StatelessWidget {
     final showPlus = entryCount > 3;
     
     return Positioned(
-      bottom: 4,
-      right: 4,
+      bottom: 0,
+      left: 0,
+      right: 0,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        height: 12,
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(6),
+            bottomRight: Radius.circular(6),
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Show dots
-            for (int i = 0; i < dotsToShow; i++) ...[
-              if (i > 0) const SizedBox(width: 3),
-              Container(
-                width: 4,
-                height: 4,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Show dots
+              for (int i = 0; i < dotsToShow; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-            ],
-            // Show + if more than 3 entries
-            if (showPlus) ...[
-              const SizedBox(width: 3),
-              const Text(
-                '+',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
+              ],
+              // Show + if more than 3 entries
+              if (showPlus) ...[
+                const SizedBox(width: 4),
+                const Text(
+                  '+',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
