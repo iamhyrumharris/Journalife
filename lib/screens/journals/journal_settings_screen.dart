@@ -202,16 +202,6 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
         .where((e) => e.hasAttachments)
         .length;
     final entriesWithLocation = entries.where((e) => e.hasLocation).length;
-    final entriesWithRating = entries.where((e) => e.hasRating).length;
-
-    // Calculate average rating
-    double? averageRating;
-    if (entriesWithRating > 0) {
-      final totalRating = entries
-          .where((e) => e.hasRating)
-          .fold<int>(0, (sum, entry) => sum + (entry.rating ?? 0));
-      averageRating = totalRating / entriesWithRating;
-    }
 
     return Card(
       child: Padding(
@@ -255,15 +245,6 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
                 ),
               ],
             ),
-            if (averageRating != null) ...[
-              const Divider(),
-              _buildStatItem(
-                icon: Icons.star,
-                title: 'Average Rating',
-                value: averageRating.toStringAsFixed(1),
-                subtitle: '$entriesWithRating rated entries',
-              ),
-            ],
           ],
         ),
       ),

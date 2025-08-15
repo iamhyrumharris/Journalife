@@ -110,7 +110,6 @@ void main() {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         tags: ['integration-test', 'webdav', 'sync'],
-        rating: 4,
         latitude: 37.7749,
         longitude: -122.4194,
         locationName: 'San Francisco, CA',

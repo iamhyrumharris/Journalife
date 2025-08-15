@@ -275,21 +275,6 @@ class _SearchOverlayState extends ConsumerState<SearchOverlay> {
               // Entry metadata
               Row(
                 children: [
-                  // Rating
-                  if (entry.hasRating) ...[
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(
-                        5,
-                        (i) => Icon(
-                          i < entry.rating! ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
 
                   // Attachments indicator
                   if (entry.hasAttachments) ...[
@@ -336,8 +321,8 @@ class _SearchOverlayState extends ConsumerState<SearchOverlay> {
                         ),
                       ),
                       backgroundColor: isHighlighted 
-                        ? Colors.yellow.withOpacity(0.3)
-                        : Colors.blue.withOpacity(0.1),
+                        ? Colors.yellow.withValues(alpha: 0.3)
+                        : Colors.blue.withValues(alpha: 0.1),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                     );
@@ -376,7 +361,7 @@ class _SearchOverlayState extends ConsumerState<SearchOverlay> {
       spans.add(TextSpan(
         text: text.substring(index, index + query.length),
         style: baseStyle.copyWith(
-          backgroundColor: Colors.yellow.withOpacity(0.3),
+          backgroundColor: Colors.yellow.withValues(alpha: 0.3),
           fontWeight: FontWeight.bold,
         ),
       ));

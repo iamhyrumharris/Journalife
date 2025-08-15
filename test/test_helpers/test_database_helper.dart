@@ -67,7 +67,6 @@ class TestDatabaseHelper {
         latitude REAL,
         longitude REAL,
         location_name TEXT,
-        rating INTEGER,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (journal_id) REFERENCES journals (id)
@@ -139,7 +138,6 @@ class TestDatabaseHelper {
           'latitude': entry.latitude,
           'longitude': entry.longitude,
           'location_name': entry.locationName,
-          'rating': entry.rating,
           'created_at': entry.createdAt.toIso8601String(),
           'updated_at': entry.updatedAt.toIso8601String(),
         });

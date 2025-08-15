@@ -8,7 +8,6 @@ class Entry {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<String> tags;
-  final int? rating;
   final double? latitude;
   final double? longitude;
   final String? locationName;
@@ -22,7 +21,6 @@ class Entry {
     required this.createdAt,
     required this.updatedAt,
     required this.tags,
-    this.rating,
     this.latitude,
     this.longitude,
     this.locationName,
@@ -38,7 +36,6 @@ class Entry {
       'createdAt': createdAt.millisecondsSinceEpoch,
       'updatedAt': updatedAt.millisecondsSinceEpoch,
       'tags': tags.join(','),
-      'rating': rating,
       'latitude': latitude,
       'longitude': longitude,
       'locationName': locationName,
@@ -54,7 +51,6 @@ class Entry {
       'created_at': createdAt.millisecondsSinceEpoch,
       'updated_at': updatedAt.millisecondsSinceEpoch,
       'tags': tags.join(','),
-      'rating': rating,
       'latitude': latitude,
       'longitude': longitude,
       'location_name': locationName,
@@ -78,7 +74,6 @@ class Entry {
               .where((tag) => tag.isNotEmpty)
               .toList() ??
           [],
-      rating: json['rating'] as int?,
       latitude: json['latitude'] as double?,
       longitude: json['longitude'] as double?,
       locationName: json['locationName'] as String?,
@@ -103,7 +98,6 @@ class Entry {
               .where((tag) => tag.isNotEmpty)
               .toList() ??
           [],
-      rating: map['rating'] as int?,
       latitude: map['latitude'] as double?,
       longitude: map['longitude'] as double?,
       locationName: map['location_name'] as String?,
@@ -119,7 +113,6 @@ class Entry {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<String>? tags,
-    int? rating,
     double? latitude,
     double? longitude,
     String? locationName,
@@ -133,7 +126,6 @@ class Entry {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       tags: tags ?? this.tags,
-      rating: rating ?? this.rating,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       locationName: locationName ?? this.locationName,
@@ -142,7 +134,6 @@ class Entry {
   }
 
   bool get hasLocation => latitude != null && longitude != null;
-  bool get hasRating => rating != null;
   bool get hasTags => tags.isNotEmpty;
   bool get hasAttachments => attachments.isNotEmpty;
 

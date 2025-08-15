@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,10 @@ import '../../providers/entry_provider.dart';
 import '../../providers/journal_provider.dart';
 import '../../services/media_service.dart';
 import '../../widgets/audio_recorder_widget.dart';
+import '../../widgets/text_formatting_toolbar.dart';
+import '../../widgets/attachment_list_widget.dart';
+import '../../widgets/photo_collage_widget.dart';
+import '../../widgets/full_screen_gallery_widget.dart';
 
 class EntryEditScreen extends ConsumerStatefulWidget {
   final Entry? entry;
@@ -39,8 +44,14 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
   final _contentFocusNode = FocusNode();
   
   bool _isTextFieldFocused = false;
+  bool _showFormattingToolbar = false;
+  
+  // Auto-save functionality
+  Timer? _autoSaveTimer;
+  DateTime? _lastSaved;
+  bool _hasUnsavedChanges = false;
+  bool _isSaving = false;
 
-  int? _rating;
   double? _latitude;
   double? _longitude;
   List<Attachment> _attachments = [];
@@ -61,6 +72,10 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     // Add focus listeners
     _titleFocusNode.addListener(_onFocusChange);
     _contentFocusNode.addListener(_onFocusChange);
+    
+    // Add text change listeners for auto-save
+    _titleController.addListener(_onTextChanged);
+    _contentController.addListener(_onTextChanged);
 
     if (_isEditing) {
       final entry = widget.entry!;
@@ -68,7 +83,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
       _contentController.text = entry.content;
       _tagsController.text = entry.tags.join(', ');
       _locationController.text = entry.locationName ?? '';
-      _rating = entry.rating;
       _latitude = entry.latitude;
       _longitude = entry.longitude;
       _attachments = List.from(entry.attachments);
@@ -90,13 +104,52 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     });
   }
 
-  Future<bool> _onWillPop() async {
-    _saveEntryIfNotBlank();
-    return true;
+  void _onTextChanged() {
+    if (!_hasUnsavedChanges) {
+      setState(() {
+        _hasUnsavedChanges = true;
+      });
+    }
+    
+    // Cancel existing timer and start new one
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(seconds: 2), () {
+      _autoSave();
+    });
   }
+
+  Future<void> _autoSave() async {
+    if (_isSaving) return;
+    
+    final titleText = _titleController.text.trim();
+    final contentText = _contentController.text.trim();
+    
+    // Don't auto-save completely blank entries
+    if (titleText.isEmpty && contentText.isEmpty && _attachments.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await _saveEntry();
+      setState(() {
+        _hasUnsavedChanges = false;
+        _lastSaved = DateTime.now();
+      });
+    } finally {
+      setState(() {
+        _isSaving = false;
+      });
+    }
+  }
+
 
   @override
   void dispose() {
+    _autoSaveTimer?.cancel();
     _titleController.dispose();
     _contentController.dispose();
     _tagsController.dispose();
@@ -111,7 +164,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     final currentJournal = ref.watch(currentJournalProvider);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
 
     if (currentJournal == null) {
       return Scaffold(
@@ -125,29 +177,67 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     final dateFormatter = DateFormat('E, MMM d, yyyy h:mm a');
     final formattedDate = dateFormatter.format(now);
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          _saveEntryIfNotBlank();
+        }
+      },
       child: Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
         surfaceTintColor: colorScheme.surface,
-        leading: IconButton(
-          onPressed: () {
-            _saveEntryIfNotBlank();
-            Navigator.pop(context);
-          },
-          icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
-        ),
-        title: Text(
-          formattedDate,
-          style: TextStyle(
-            color: colorScheme.onSurface.withOpacity(0.7),
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
           ),
+          child: IconButton(
+            onPressed: () {
+              _saveEntryIfNotBlank();
+              Navigator.pop(context);
+            },
+            icon: Icon(
+              Icons.arrow_back,
+              color: colorScheme.onSurface,
+              size: 20,
+            ),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              formattedDate,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (_isSaving || _hasUnsavedChanges || _lastSaved != null)
+              Text(
+                _isSaving 
+                    ? 'Saving...'
+                    : _hasUnsavedChanges 
+                        ? 'Unsaved changes'
+                        : 'Saved ${_getTimeAgo(_lastSaved!)}',
+                style: TextStyle(
+                  color: _isSaving 
+                      ? colorScheme.primary
+                      : _hasUnsavedChanges
+                          ? colorScheme.error
+                          : colorScheme.onSurface.withValues(alpha: 0.5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+          ],
         ),
         centerTitle: false,
       ),
@@ -166,7 +256,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                   Container(
                     height: 1,
                     width: double.infinity,
-                    color: colorScheme.onSurface.withOpacity(0.08),
+                    color: colorScheme.onSurface.withValues(alpha: 0.08),
                   ),
                   const SizedBox(height: 12),
                   // Metadata content
@@ -175,13 +265,13 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                       Icon(
                         Icons.circle,
                         size: 8,
-                        color: colorScheme.onSurface.withOpacity(0.5),
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         currentJournal.name,
                         style: TextStyle(
-                          color: colorScheme.onSurface.withOpacity(0.5),
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -190,7 +280,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                       Icon(
                         Icons.location_on,
                         size: 14,
-                        color: colorScheme.onSurface.withOpacity(0.5),
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -198,7 +288,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                             ? 'Unknown Location'
                             : _locationController.text,
                         style: TextStyle(
-                          color: colorScheme.onSurface.withOpacity(0.5),
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -207,13 +297,13 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                       Icon(
                         Icons.wb_sunny,
                         size: 14,
-                        color: colorScheme.onSurface.withOpacity(0.5),
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '72°F',
                         style: TextStyle(
-                          color: colorScheme.onSurface.withOpacity(0.5),
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -232,28 +322,39 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Photo collage
+                    PhotoCollageWidget(
+                      photos: _attachments
+                          .where((attachment) => attachment.type == AttachmentType.photo)
+                          .toList(),
+                      onPhotoTap: _openGallery,
+                    ),
+                    
                     // Title TextField
                     TextField(
                       controller: _titleController,
                       focusNode: _titleFocusNode,
                       style: TextStyle(
                         color: colorScheme.onSurface,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w500,
                         height: 1.2,
                       ),
                       cursorColor: colorScheme.primary,
-                      decoration: InputDecoration(
-                        hintText: _isEditing ? null : 'A moment to remember',
+                      decoration: const InputDecoration(
+                        hintText: 'A moment to remember',
                         hintStyle: TextStyle(
-                          color: colorScheme.onSurface.withOpacity(0.3),
-                          fontSize: 32,
-                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9E9E9E),
+                          fontSize: 28,
+                          fontWeight: FontWeight.w500,
                           height: 1.2,
                         ),
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                         isDense: true,
+                        filled: false,
                       ),
                       maxLines: null,
                       textCapitalization: TextCapitalization.sentences,
@@ -267,28 +368,35 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
                       focusNode: _contentFocusNode,
                       style: TextStyle(
                         color: colorScheme.onSurface,
-                        fontSize: 18,
+                        fontSize: 17,
                         height: 1.6,
                         fontWeight: FontWeight.w400,
                       ),
                       cursorColor: colorScheme.primary,
-                      decoration: InputDecoration(
-                        hintText: _isEditing
-                            ? null
-                            : 'Today brought new perspectives and quiet revelations that shifted my understanding. The morning light filtered through familiar windows, casting shadows that seemed to whisper stories of transformation...',
+                      decoration: const InputDecoration(
+                        hintText: 'Today brought new perspectives and quiet revelations that shifted my understanding. The morning light filtered through familiar windows, casting shadows that seemed to whisper stories of transformation...',
                         hintStyle: TextStyle(
-                          color: colorScheme.onSurface.withOpacity(0.3),
-                          fontSize: 18,
+                          color: Color(0xFF9E9E9E),
+                          fontSize: 17,
                           height: 1.6,
                           fontWeight: FontWeight.w400,
                         ),
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                         isDense: true,
+                        filled: false,
                       ),
                       maxLines: null,
                       minLines: 8,
                       textCapitalization: TextCapitalization.sentences,
+                    ),
+
+                    // Attachment list
+                    AttachmentListWidget(
+                      attachments: _attachments,
+                      onRemove: _removeAttachment,
                     ),
                   ],
                 ),
@@ -298,61 +406,73 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
             // Bottom action row - show when text fields are not focused (clean writing experience)
             if (!_isTextFieldFocused)
               Container(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 8,
-                  bottom: 8 + MediaQuery.of(context).padding.bottom,
-                ),
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: colorScheme.onSurface.withOpacity(0.08),
-                      width: 1,
-                    ),
+                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: colorScheme.outline.withValues(alpha: 0.2),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    if (keyboardHeight > 0)
-                      IconButton(
-                        onPressed: () => FocusScope.of(context).unfocus(),
-                        icon: Icon(
-                          Icons.keyboard_arrow_down,
-                          color: colorScheme.onSurface.withOpacity(0.6),
-                          size: 24,
-                        ),
-                      ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: _addPhoto,
-                      icon: Icon(
-                        Icons.image_outlined,
-                        color: colorScheme.onSurface.withOpacity(0.6),
-                        size: 22,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _addFile,
-                      icon: Icon(
-                        Icons.attach_file_outlined,
-                        color: colorScheme.onSurface.withOpacity(0.6),
-                        size: 22,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        // TODO: Implement text formatting options
-                      },
-                      icon: Icon(
-                        Icons.text_format_outlined,
-                        color: colorScheme.onSurface.withOpacity(0.6),
-                        size: 22,
-                      ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildActionButton(
+                      icon: Icons.image_outlined,
+                      onPressed: _addPhoto,
+                      isActive: false,
+                      colorScheme: colorScheme,
+                    ),
+                    _buildActionButton(
+                      icon: Icons.attach_file_outlined,
+                      onPressed: _addFile,
+                      isActive: false,
+                      colorScheme: colorScheme,
+                    ),
+                    _buildActionButton(
+                      icon: _latitude != null && _longitude != null
+                          ? Icons.location_on
+                          : Icons.location_on_outlined,
+                      onPressed: _addLocation,
+                      isActive: _latitude != null && _longitude != null,
+                      colorScheme: colorScheme,
+                    ),
+                    _buildActionButton(
+                      icon: _showFormattingToolbar 
+                          ? Icons.text_format 
+                          : Icons.text_format_outlined,
+                      onPressed: () {
+                        setState(() {
+                          _showFormattingToolbar = !_showFormattingToolbar;
+                        });
+                      },
+                      isActive: _showFormattingToolbar,
+                      colorScheme: colorScheme,
+                    ),
+                    _buildActionButton(
+                      icon: Icons.bookmark_outline,
+                      onPressed: () {
+                        // TODO: Implement bookmark functionality
+                      },
+                      isActive: false,
+                      colorScheme: colorScheme,
+                    ),
+                  ],
+                ),
+              ),
+
+            // Text formatting toolbar - show when enabled
+            if (_showFormattingToolbar)
+              TextFormattingToolbar(
+                controller: _contentController,
               ),
           ],
         ),
@@ -361,7 +481,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     );
   }
 
-  void _saveEntryIfNotBlank() {
+  Future<void> _saveEntryIfNotBlank() async {
     // Check if entry is completely blank
     final titleText = _titleController.text.trim();
     final contentText = _contentController.text.trim();
@@ -371,14 +491,14 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
       return;
     }
     
-    _saveEntry();
+    await _saveEntry();
   }
 
-  void _saveEntry() {
+  Future<void> _saveEntry() async {
     final currentJournal = ref.read(currentJournalProvider);
     if (currentJournal == null) return;
 
-    // For the simplified interface, we'll keep existing tags and ratings from editing
+    // For the simplified interface, we'll keep existing tags from editing
     // but won't allow setting new ones for new entries
     final tags = _isEditing
         ? _tagsController.text
@@ -395,7 +515,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
             : _titleController.text,
         content: _contentController.text,
         tags: tags,
-        rating: _rating,
         latitude: _latitude,
         longitude: _longitude,
         locationName: _locationController.text.isEmpty
@@ -418,7 +537,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
             content: _contentController.text,
             createdAt: widget.initialDate,
             tags: tags,
-            rating: null, // No rating for new entries in simplified interface
             latitude: _latitude,
             longitude: _longitude,
             locationName: _locationController.text.isEmpty
@@ -578,9 +696,112 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     }
   }
 
+  void _addLocation() async {
+    // Show loading indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Getting current location...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    final locationData = await MediaService.getCurrentLocation();
+    
+    if (locationData != null && !locationData.containsKey('error')) {
+      setState(() {
+        _latitude = locationData['latitude'];
+        _longitude = locationData['longitude'];
+        _locationController.text = locationData['locationName'] ?? 'Unknown Location';
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Location added: ${_locationController.text}'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      }
+    } else if (mounted) {
+      final errorMessage = locationData?['error'] ?? 'Failed to get location';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
   void _removeAttachment(Attachment attachment) {
     setState(() {
       _attachments.remove(attachment);
     });
+  }
+
+  void _openGallery(int index) {
+    final photos = _attachments
+        .where((attachment) => attachment.type == AttachmentType.photo)
+        .toList();
+    
+    if (photos.isNotEmpty && index < photos.length) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => FullScreenGalleryWidget(
+            photos: photos,
+            initialIndex: index,
+          ),
+        ),
+      );
+    }
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${difference.inDays}d ago';
+    }
+  }
+
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+    required bool isActive,
+    required ColorScheme colorScheme,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isActive 
+            ? colorScheme.primary.withValues(alpha: 0.1)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(
+          icon,
+          color: isActive
+              ? colorScheme.primary
+              : colorScheme.onSurface.withValues(alpha: 0.7),
+          size: 24,
+        ),
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(
+          minWidth: 40,
+          minHeight: 40,
+        ),
+      ),
+    );
   }
 }

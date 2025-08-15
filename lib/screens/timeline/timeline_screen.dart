@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../models/entry.dart';
 import '../../models/journal.dart';
 import '../../providers/journal_provider.dart';
 import '../../providers/entry_provider.dart';
 import '../../widgets/journal_selector.dart';
 import '../../widgets/attachment_thumbnail.dart';
+import '../../widgets/common/loading_shimmer.dart';
+import '../../widgets/common/empty_state_widget.dart';
+import '../../widgets/common/error_state_widget.dart';
 import '../entry/entry_edit_screen.dart';
 import '../settings/settings_screen.dart';
 import '../profile/profile_screen.dart';
@@ -64,22 +68,10 @@ class TimelineScreen extends ConsumerWidget {
         ],
       ),
       body: journalsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error, size: 48, color: Colors.red),
-              const SizedBox(height: 16),
-              Text('Error: $error'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () =>
-                    ref.read(journalProvider.notifier).loadJournals(),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+        loading: () => _buildShimmerLoading(),
+        error: (error, stack) => ErrorStateWidget(
+          error: error.toString(),
+          onRetry: () => ref.read(journalProvider.notifier).loadJournals(),
         ),
         data: (journals) {
           if (journals.isEmpty) {
@@ -104,29 +96,8 @@ class TimelineScreen extends ConsumerWidget {
   }
 
   Widget _buildEmptyState(WidgetRef ref) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.book, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          const Text(
-            'No journals yet',
-            style: TextStyle(fontSize: 18, color: Colors.grey),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Create your first journal to get started',
-            style: TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _showCreateJournalDialog(ref),
-            icon: const Icon(Icons.add),
-            label: const Text('Create Journal'),
-          ),
-        ],
-      ),
+    return NoJournalsEmptyState(
+      onCreateJournal: () => _showCreateJournalDialog(ref),
     );
   }
 
@@ -138,54 +109,24 @@ class TimelineScreen extends ConsumerWidget {
     final entriesAsync = ref.watch(entryProvider(journal.id));
 
     return entriesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error, size: 48, color: Colors.red),
-            const SizedBox(height: 16),
-            Text('Error loading entries: $error'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () =>
-                  ref.read(entryProvider(journal.id).notifier).loadEntries(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
+      loading: () => _buildShimmerLoading(),
+      error: (error, stack) => ErrorStateWidget(
+        error: error.toString(),
+        onRetry: () => ref.read(entryProvider(journal.id).notifier).loadEntries(),
       ),
       data: (entries) {
         if (entries.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.timeline, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  'No entries in ${journal.name}',
-                  style: const TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Start journaling to see your timeline',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/entry/create');
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Entry'),
-                ),
-              ],
-            ),
+          return NoEntriesEmptyState(
+            onCreateEntry: () => Navigator.pushNamed(context, '/entry/create'),
           );
         }
 
-        return _buildEntriesList(entries);
+        return RefreshIndicator(
+          onRefresh: () async {
+            await ref.read(entryProvider(journal.id).notifier).loadEntries();
+          },
+          child: _buildEntriesList(entries),
+        );
       },
     );
   }
@@ -301,19 +242,6 @@ class TimelineScreen extends ConsumerWidget {
                   ],
                   if (entry.hasLocation)
                     Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                  if (entry.hasRating) ...[
-                    const SizedBox(width: 8),
-                    Row(
-                      children: List.generate(
-                        entry.rating!,
-                        (i) => const Icon(
-                          Icons.star,
-                          size: 16,
-                          color: Colors.amber,
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
 
@@ -424,6 +352,19 @@ class TimelineScreen extends ConsumerWidget {
     } else {
       return DateFormat('MMMM d, yyyy').format(date);
     }
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 6, // Show 6 shimmer cards
+      itemBuilder: (context, index) {
+        return ShimmerCard(
+          height: index % 3 == 0 ? 160 : 120, // Vary height for realism
+          margin: const EdgeInsets.only(bottom: 12),
+        );
+      },
+    );
   }
 
   void _showCreateJournalDialog(WidgetRef ref) {

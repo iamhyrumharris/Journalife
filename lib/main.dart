@@ -7,6 +7,8 @@ import 'screens/journals/journal_list_screen.dart';
 import 'models/entry.dart';
 import 'services/error_service.dart';
 import 'providers/user_provider.dart';
+import 'providers/theme_provider.dart';
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   await SentryFlutter.init((options) {
@@ -36,13 +38,15 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Initialize sample users for development
     ref.watch(createSampleUsersProvider);
+    
+    // Watch theme mode from provider
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
       title: 'Journal',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme(),
+      darkTheme: AppTheme.darkTheme(),
+      themeMode: themeMode,
       home: const HomeScreen(),
       routes: {'/journals': (context) => const JournalListScreen()},
       onGenerateRoute: (settings) {

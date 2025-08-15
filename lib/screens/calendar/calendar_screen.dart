@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/entry.dart';
 import '../../models/journal.dart';
@@ -7,6 +8,9 @@ import '../../providers/entry_provider.dart';
 import '../../widgets/journal_selector.dart';
 import '../../widgets/file_migration_dialog.dart';
 import '../../widgets/scrollable_calendar.dart';
+import '../../widgets/common/loading_shimmer.dart';
+import '../../widgets/common/empty_state_widget.dart';
+import '../../widgets/common/error_state_widget.dart';
 import '../entry/entry_edit_screen.dart';
 import '../entry/day_entries_screen.dart';
 import '../settings/settings_screen.dart';
@@ -25,11 +29,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime? _selectedDay;
   DateTime _currentViewedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   final GlobalKey<ScrollableCalendarState> _calendarKey = GlobalKey<ScrollableCalendarState>();
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _selectedDay = DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -81,21 +92,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ],
       ),
       body: journalsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error, size: 48, color: Colors.red),
-              const SizedBox(height: 16),
-              Text('Error: $error'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => ref.read(journalProvider.notifier).loadJournals(),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+        loading: () => _buildShimmerLoading(),
+        error: (error, stack) => ErrorStateWidget(
+          error: error.toString(),
+          onRetry: () => ref.read(journalProvider.notifier).loadJournals(),
         ),
         data: (journals) {
           if (journals.isEmpty) {
@@ -130,29 +130,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.book, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          const Text(
-            'No journals yet',
-            style: TextStyle(fontSize: 18, color: Colors.grey),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Create your first journal to get started',
-            style: TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _showCreateJournalDialog(),
-            icon: const Icon(Icons.add),
-            label: const Text('Create Journal'),
-          ),
-        ],
-      ),
+    return NoJournalsEmptyState(
+      onCreateJournal: () => _showCreateJournalDialog(),
     );
   }
 
@@ -161,37 +140,45 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     return entriesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error, size: 48, color: Colors.red),
-            const SizedBox(height: 16),
-            Text('Error loading entries: $error'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => ref.read(entryProvider(journal.id).notifier).loadEntries(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
+      error: (error, stack) => ErrorStateWidget(
+        error: error.toString(),
+        onRetry: () => ref.read(entryProvider(journal.id).notifier).loadEntries(),
       ),
-      data: (entries) => ScrollableCalendar(
-        key: _calendarKey,
-        selectedYear: _selectedYear,
-        selectedDay: _selectedDay,
-        entries: entries,
-        onDaySelected: (selectedDay) => _handleDaySelection(selectedDay, entries, journal.id),
-        onYearChanged: (year) {
-          setState(() {
-            _selectedYear = year;
-          });
+      data: (entries) => KeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: (KeyEvent event) {
+          if (event is KeyDownEvent) {
+            _handleKeyEvent(event, entries, journal.id);
+          }
         },
-        onMonthChanged: (month) {
-          setState(() {
-            _currentViewedMonth = month;
-          });
-        },
+        child: GestureDetector(
+          onPanUpdate: (details) {
+            // Add swipe gesture support for month navigation
+            if (details.delta.dx > 10) {
+              _navigateToPreviousMonth();
+            } else if (details.delta.dx < -10) {
+              _navigateToNextMonth();
+            }
+          },
+          child: ScrollableCalendar(
+            key: _calendarKey,
+            selectedYear: _selectedYear,
+            selectedDay: _selectedDay,
+            entries: entries,
+            onDaySelected: (selectedDay) => _handleDaySelection(selectedDay, entries, journal.id),
+            onYearChanged: (year) {
+              setState(() {
+                _selectedYear = year;
+              });
+            },
+            onMonthChanged: (month) {
+              setState(() {
+                _currentViewedMonth = month;
+              });
+            },
+          ),
+        ),
       ),
     );
   }
@@ -252,6 +239,75 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     
     // Scroll calendar to today
     _calendarKey.currentState?.scrollToDate(today);
+  }
+
+  void _handleKeyEvent(KeyDownEvent event, List<Entry> entries, String journalId) {
+    if (_selectedDay == null) return;
+    
+    DateTime newSelectedDay = _selectedDay!;
+    
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowLeft:
+        newSelectedDay = _selectedDay!.subtract(const Duration(days: 1));
+        break;
+      case LogicalKeyboardKey.arrowRight:
+        newSelectedDay = _selectedDay!.add(const Duration(days: 1));
+        break;
+      case LogicalKeyboardKey.arrowUp:
+        newSelectedDay = _selectedDay!.subtract(const Duration(days: 7));
+        break;
+      case LogicalKeyboardKey.arrowDown:
+        newSelectedDay = _selectedDay!.add(const Duration(days: 7));
+        break;
+      case LogicalKeyboardKey.enter:
+      case LogicalKeyboardKey.space:
+        _handleDaySelection(_selectedDay!, entries, journalId);
+        return;
+      case LogicalKeyboardKey.keyT:
+        _jumpToToday();
+        return;
+      default:
+        return;
+    }
+    
+    setState(() {
+      _selectedDay = newSelectedDay;
+      if (newSelectedDay.year != _selectedYear) {
+        _selectedYear = newSelectedDay.year;
+      }
+    });
+    
+    // Scroll to the new date if needed
+    _calendarKey.currentState?.scrollToDate(newSelectedDay);
+  }
+
+  void _navigateToPreviousMonth() {
+    final previousMonth = DateTime(_currentViewedMonth.year, _currentViewedMonth.month - 1);
+    setState(() {
+      _currentViewedMonth = previousMonth;
+    });
+    _calendarKey.currentState?.scrollToDate(previousMonth);
+  }
+
+  void _navigateToNextMonth() {
+    final nextMonth = DateTime(_currentViewedMonth.year, _currentViewedMonth.month + 1);
+    setState(() {
+      _currentViewedMonth = nextMonth;
+    });
+    _calendarKey.currentState?.scrollToDate(nextMonth);
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 3, // Show 3 shimmer cards
+      itemBuilder: (context, index) {
+        return ShimmerCard(
+          height: 200,
+          margin: const EdgeInsets.only(bottom: 16),
+        );
+      },
+    );
   }
 
   void _showCreateJournalDialog() {

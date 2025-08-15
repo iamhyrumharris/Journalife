@@ -68,12 +68,21 @@ dependencies:
   path_provider: ^2.1.1
   url_launcher: ^6.2.1
   share_plus: ^7.2.1
+  shared_preferences: ^2.2.2
   
   # Error Reporting
   sentry_flutter: ^8.9.0
   
   # Cryptographic operations
   crypto: ^3.0.3
+  
+  # UI Enhancements
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.0
+  
+  # Animations
+  animations: ^2.0.8
+  flutter_staggered_animations: ^1.1.1
 
 dev_dependencies:
   flutter_test:

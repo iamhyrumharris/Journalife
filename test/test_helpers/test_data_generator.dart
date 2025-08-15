@@ -54,7 +54,6 @@ class TestDataGenerator {
     double? latitude,
     double? longitude,
     String? locationName,
-    int? rating,
     DateTime? createdAt,
     List<Attachment>? attachments,
   }) {
@@ -67,7 +66,6 @@ class TestDataGenerator {
       latitude: latitude,
       longitude: longitude,
       locationName: locationName,
-      rating: rating,
       createdAt: createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       attachments: attachments ?? [],

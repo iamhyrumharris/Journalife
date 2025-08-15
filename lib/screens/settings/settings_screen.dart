@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../sync/sync_management_screen.dart';
+import '../../providers/theme_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -56,15 +57,7 @@ class SettingsScreen extends ConsumerWidget {
             context,
             'Appearance',
             [
-              _buildSettingsTile(
-                context,
-                icon: Icons.palette,
-                title: 'Theme',
-                subtitle: 'Light, dark, or system default',
-                onTap: () {
-                  _showThemeDialog(context);
-                },
-              ),
+              _buildThemeSettingsTile(context, ref),
               _buildSettingsTile(
                 context,
                 icon: Icons.text_fields,
@@ -192,6 +185,32 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildThemeSettingsTile(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+    String themeName;
+    switch (themeMode) {
+      case ThemeMode.light:
+        themeName = 'Light';
+        break;
+      case ThemeMode.dark:
+        themeName = 'Dark';
+        break;
+      case ThemeMode.system:
+        themeName = 'System Default';
+        break;
+    }
+    
+    return ListTile(
+      leading: const Icon(Icons.palette),
+      title: const Text('Theme'),
+      subtitle: Text(themeName),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        _showThemeDialog(context, ref);
+      },
+    );
+  }
+
   void _showExportDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -224,42 +243,59 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showThemeDialog(BuildContext context) {
+  void _showThemeDialog(BuildContext context, WidgetRef ref) {
+    final currentThemeMode = ref.read(themeModeProvider);
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Choose Theme'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<String>(
-              title: const Text('Light'),
-              value: 'light',
-              groupValue: 'system', // TODO: Get from settings provider
-              onChanged: (value) {
-                // TODO: Update theme setting
-                Navigator.pop(context);
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('Dark'),
-              value: 'dark',
-              groupValue: 'system', // TODO: Get from settings provider
-              onChanged: (value) {
-                // TODO: Update theme setting
-                Navigator.pop(context);
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('System Default'),
-              value: 'system',
-              groupValue: 'system', // TODO: Get from settings provider
-              onChanged: (value) {
-                // TODO: Update theme setting
-                Navigator.pop(context);
-              },
-            ),
-          ],
+        content: StatefulBuilder(
+          builder: (context, setState) {
+            ThemeMode selectedMode = currentThemeMode;
+            
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<ThemeMode>(
+                  title: const Text('Light'),
+                  value: ThemeMode.light,
+                  groupValue: selectedMode,
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => selectedMode = value);
+                      ref.read(themeModeProvider.notifier).setThemeMode(value);
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+                RadioListTile<ThemeMode>(
+                  title: const Text('Dark'),
+                  value: ThemeMode.dark,
+                  groupValue: selectedMode,
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => selectedMode = value);
+                      ref.read(themeModeProvider.notifier).setThemeMode(value);
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+                RadioListTile<ThemeMode>(
+                  title: const Text('System Default'),
+                  value: ThemeMode.system,
+                  groupValue: selectedMode,
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => selectedMode = value);
+                      ref.read(themeModeProvider.notifier).setThemeMode(value);
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+              ],
+            );
+          },
         ),
         actions: [
           TextButton(

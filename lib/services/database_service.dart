@@ -12,7 +12,7 @@ import '../providers/sync_provider.dart';
 class DatabaseService {
   static Database? _database;
   static const String _databaseName = 'journal.db';
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 4;
 
   Future<Database> get database async {
     _database ??= await _initDatabase();
@@ -66,7 +66,6 @@ class DatabaseService {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         tags TEXT,
-        rating INTEGER,
         latitude REAL,
         longitude REAL,
         location_name TEXT,
@@ -110,6 +109,38 @@ class DatabaseService {
     if (oldVersion < 3) {
       // For now, we'll just log the upgrade - the database will be recreated fresh
       print('Upgrading database from version $oldVersion to $newVersion');
+    }
+    if (oldVersion < 4) {
+      // Remove rating column - SQLite doesn't support DROP COLUMN directly,
+      // so we create a new table and copy data over
+      await db.execute('''
+        CREATE TABLE entries_new (
+          id TEXT PRIMARY KEY,
+          journal_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          tags TEXT,
+          latitude REAL,
+          longitude REAL,
+          location_name TEXT,
+          FOREIGN KEY (journal_id) REFERENCES journals (id) ON DELETE CASCADE
+        )
+      ''');
+      
+      await db.execute('''
+        INSERT INTO entries_new (id, journal_id, title, content, created_at, updated_at, tags, latitude, longitude, location_name)
+        SELECT id, journal_id, title, content, created_at, updated_at, tags, latitude, longitude, location_name
+        FROM entries
+      ''');
+      
+      await db.execute('DROP TABLE entries');
+      await db.execute('ALTER TABLE entries_new RENAME TO entries');
+      
+      // Recreate indexes
+      await db.execute('CREATE INDEX idx_entries_journal_id ON entries(journal_id)');
+      await db.execute('CREATE INDEX idx_entries_created_at ON entries(created_at)');
     }
   }
 

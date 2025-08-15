@@ -266,21 +266,6 @@ class DayEntriesScreen extends ConsumerWidget {
                     const SizedBox(width: 16),
                   ],
                   
-                  // Rating indicator
-                  if (entry.hasRating) ...[
-                    Row(
-                      children: List.generate(
-                        5,
-                        (i) => Icon(
-                          i < entry.rating! ? Icons.star : Icons.star_border,
-                          size: 14,
-                          color: Colors.amber,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-                  
                   const Spacer(),
                   
                   // Entry action indicator

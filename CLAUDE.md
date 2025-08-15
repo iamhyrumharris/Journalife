@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Flutter journal application with multi-user support, WebDAV sync, and journal sharing capabilities. The app features five main views (Calendar, Timeline, Map, Attachments, Search) and comprehensive entry management with rich media support.
 
+## User Preferences
+
+### Feature Preferences
+- **No Mood Tracking**: The user has explicitly requested removal of mood/rating functionality from the journal app. Do not implement or suggest mood tracking, rating systems, or emotional analysis features unless explicitly requested.
+
 ## Key Commands
 
 ### Development

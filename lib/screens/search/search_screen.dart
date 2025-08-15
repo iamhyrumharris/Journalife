@@ -363,19 +363,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       size: 16,
                       color: Colors.grey[600],
                     ),
-                  if (entry.hasRating) ...[
-                    const SizedBox(width: 8),
-                    Row(
-                      children: List.generate(
-                        entry.rating!,
-                        (i) => const Icon(
-                          Icons.star,
-                          size: 16,
-                          color: Colors.amber,
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
               

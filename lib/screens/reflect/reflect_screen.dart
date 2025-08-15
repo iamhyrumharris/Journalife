@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
 import '../../models/entry.dart';
 import '../../models/journal.dart';
@@ -127,17 +128,28 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
         child: Text('Error loading entries: $error'),
       ),
       data: (entries) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildStatsSection(entries),
-              const SizedBox(height: 24),
-              _buildOnThisDaySection(entries),
-              const SizedBox(height: 24),
-              _buildRecentTrendsSection(entries),
-            ],
+        return AnimationLimiter(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: AnimationConfiguration.toStaggeredList(
+                duration: const Duration(milliseconds: 375),
+                childAnimationBuilder: (widget) => SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(child: widget),
+                ),
+                children: [
+                  _buildStatsSection(entries),
+                  const SizedBox(height: 24),
+                  _buildOnThisDaySection(entries),
+                  const SizedBox(height: 24),
+                  _buildRecentTrendsSection(entries),
+                  const SizedBox(height: 24),
+                  _buildWritingInsightsSection(entries),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -213,12 +225,6 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
              entry.createdAt.year == today.year;
     }).length;
 
-    final averageRating = entries.where((e) => e.hasRating).isNotEmpty
-        ? entries.where((e) => e.hasRating)
-            .map((e) => e.rating!)
-            .reduce((a, b) => a + b) / 
-          entries.where((e) => e.hasRating).length
-        : 0.0;
     
     final currentStreak = _calculateCurrentStreak(entries);
     final longestStreak = _calculateLongestStreak(entries);
@@ -269,9 +275,9 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
                 ),
                 Expanded(
                   child: _buildStatItem(
-                    'Avg Rating',
-                    averageRating > 0 ? averageRating.toStringAsFixed(1) : 'N/A',
-                    Icons.star,
+                    'Words Total',
+                    _calculateTotalWords(entries).toString(),
+                    Icons.text_fields,
                     Colors.amber,
                   ),
                 ),
@@ -308,7 +314,7 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -454,19 +460,6 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              if (entry.hasRating) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: List.generate(
-                    5,
-                    (i) => Icon(
-                      i < entry.rating! ? Icons.star : Icons.star_border,
-                      color: Colors.amber,
-                      size: 14,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -560,6 +553,145 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
           style: TextStyle(fontSize: 10, color: Colors.grey[600]),
         ),
       ],
+    );
+  }
+
+  int _calculateTotalWords(List<Entry> entries) {
+    return entries.fold<int>(0, (sum, entry) {
+      return sum + entry.title.split(' ').length + entry.content.split(' ').length;
+    });
+  }
+
+  Widget _buildWritingInsightsSection(List<Entry> entries) {
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    // Calculate writing insights
+    final totalWords = entries.fold<int>(0, (sum, entry) {
+      return sum + entry.title.split(' ').length + entry.content.split(' ').length;
+    });
+
+    final averageWordsPerEntry = totalWords / entries.length;
+    
+    final longestEntry = entries.reduce((a, b) =>
+        (a.title.length + a.content.length) > (b.title.length + b.content.length) ? a : b);
+    
+    final shortestEntry = entries.reduce((a, b) =>
+        (a.title.length + a.content.length) < (b.title.length + b.content.length) ? a : b);
+
+    // Calculate entries with attachments
+    final entriesWithAttachments = entries.where((e) => e.attachments.isNotEmpty).length;
+    final attachmentPercentage = entries.isNotEmpty ? (entriesWithAttachments / entries.length * 100) : 0.0;
+
+    // Calculate entries with location
+    final entriesWithLocation = entries.where((e) => e.latitude != null && e.longitude != null).length;
+    final locationPercentage = entries.isNotEmpty ? (entriesWithLocation / entries.length * 100) : 0.0;
+
+    // Most productive time
+    final hourCounts = <int, int>{};
+    for (final entry in entries) {
+      final hour = entry.createdAt.hour;
+      hourCounts[hour] = (hourCounts[hour] ?? 0) + 1;
+    }
+    
+    final mostProductiveHour = hourCounts.entries.isNotEmpty
+        ? hourCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key
+        : 0;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.insights, color: Colors.teal),
+                const SizedBox(width: 8),
+                Text(
+                  'Writing Insights',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    'Total Words',
+                    NumberFormat('#,###').format(totalWords),
+                    Icons.text_fields,
+                    Colors.blue,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    'Avg Words',
+                    averageWordsPerEntry.toStringAsFixed(0),
+                    Icons.speed,
+                    Colors.green,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    'With Media',
+                    '${attachmentPercentage.toStringAsFixed(0)}%',
+                    Icons.attach_file,
+                    Colors.orange,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    'With Location',
+                    '${locationPercentage.toStringAsFixed(0)}%',
+                    Icons.location_on,
+                    Colors.red,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildStatItem(
+              'Most Productive Hour',
+              '${mostProductiveHour.toString().padLeft(2, '0')}:00 - ${(mostProductiveHour + 1).toString().padLeft(2, '0')}:00',
+              Icons.schedule,
+              Colors.purple,
+            ),
+            const SizedBox(height: 16),
+            ExpansionTile(
+              leading: const Icon(Icons.auto_stories, color: Colors.indigo),
+              title: const Text('Entry Records'),
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.trending_up, color: Colors.green),
+                  title: const Text('Longest Entry'),
+                  subtitle: Text(longestEntry.title.isNotEmpty ? longestEntry.title : 'Untitled'),
+                  trailing: Text(
+                    '${longestEntry.title.length + longestEntry.content.length} chars',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.trending_down, color: Colors.orange),
+                  title: const Text('Shortest Entry'),
+                  subtitle: Text(shortestEntry.title.isNotEmpty ? shortestEntry.title : 'Untitled'),
+                  trailing: Text(
+                    '${shortestEntry.title.length + shortestEntry.content.length} chars',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

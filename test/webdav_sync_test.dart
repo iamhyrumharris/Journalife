@@ -121,7 +121,6 @@ void main() {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         tags: ['unit-test'],
-        rating: 5,
         attachments: [],
       );
       

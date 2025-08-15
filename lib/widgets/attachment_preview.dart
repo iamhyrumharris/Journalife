@@ -298,7 +298,7 @@ class _AttachmentPreviewState extends State<AttachmentPreview> {
               onPressed: _toggleAudioPlayback,
               icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
               style: IconButton.styleFrom(
-                backgroundColor: Colors.purple.withOpacity(0.1),
+                backgroundColor: Colors.purple.withValues(alpha: 0.1),
                 foregroundColor: Colors.purple,
               ),
             ),
@@ -334,7 +334,7 @@ class _AttachmentPreviewState extends State<AttachmentPreview> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
+            color: Colors.blue.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
@@ -394,7 +394,7 @@ class _AttachmentPreviewState extends State<AttachmentPreview> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Icon(Icons.location_on, color: Colors.red, size: 24),
