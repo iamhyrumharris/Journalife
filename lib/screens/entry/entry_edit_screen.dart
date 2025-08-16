@@ -8,10 +8,7 @@ import '../../models/attachment.dart';
 import '../../providers/entry_provider.dart';
 import '../../providers/journal_provider.dart';
 import '../../services/media_service.dart';
-import '../../widgets/audio_recorder_widget.dart';
 import '../../widgets/text_formatting_toolbar.dart';
-import '../../widgets/attachment_list_widget.dart';
-import '../../widgets/photo_collage_widget.dart';
 import '../../widgets/full_screen_gallery_widget.dart';
 import '../../widgets/responsive_entry_layout.dart';
 import '../../utils/responsive_breakpoints.dart';
@@ -36,7 +33,7 @@ class EntryEditScreen extends ConsumerStatefulWidget {
   ConsumerState<EntryEditScreen> createState() => _EntryEditScreenState();
 }
 
-class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
+class _EntryEditScreenState extends ConsumerState<EntryEditScreen> with WidgetsBindingObserver {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _tagsController = TextEditingController();
@@ -47,12 +44,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
   
   bool _isTextFieldFocused = false;
   bool _showFormattingToolbar = false;
-  
-  // Auto-save functionality
-  Timer? _autoSaveTimer;
-  DateTime? _lastSaved;
-  bool _hasUnsavedChanges = false;
-  bool _isSaving = false;
 
   double? _latitude;
   double? _longitude;
@@ -67,6 +58,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Initialize consistent entry ID for this editing session
     _entryId = widget.entry?.id ?? _uuid.v4();
@@ -74,10 +66,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     // Add focus listeners
     _titleFocusNode.addListener(_onFocusChange);
     _contentFocusNode.addListener(_onFocusChange);
-    
-    // Add text change listeners for auto-save
-    _titleController.addListener(_onTextChanged);
-    _contentController.addListener(_onTextChanged);
 
     if (_isEditing) {
       final entry = widget.entry!;
@@ -101,57 +89,33 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
   }
 
   void _onFocusChange() {
+    final wasTextFieldFocused = _isTextFieldFocused;
+    final isNowTextFieldFocused = _titleFocusNode.hasFocus || _contentFocusNode.hasFocus;
+    
     setState(() {
-      _isTextFieldFocused = _titleFocusNode.hasFocus || _contentFocusNode.hasFocus;
+      _isTextFieldFocused = isNowTextFieldFocused;
     });
+    
+    // Save when both text fields lose focus
+    if (wasTextFieldFocused && !isNowTextFieldFocused) {
+      _saveEntryIfNotBlank();
+    }
   }
 
-  void _onTextChanged() {
-    if (!_hasUnsavedChanges) {
-      setState(() {
-        _hasUnsavedChanges = true;
-      });
-    }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
     
-    // Cancel existing timer and start new one
-    _autoSaveTimer?.cancel();
-    _autoSaveTimer = Timer(const Duration(seconds: 2), () {
-      _autoSave();
-    });
-  }
-
-  Future<void> _autoSave() async {
-    if (_isSaving) return;
-    
-    final titleText = _titleController.text.trim();
-    final contentText = _contentController.text.trim();
-    
-    // Don't auto-save completely blank entries
-    if (titleText.isEmpty && contentText.isEmpty && _attachments.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    try {
-      await _saveEntry();
-      setState(() {
-        _hasUnsavedChanges = false;
-        _lastSaved = DateTime.now();
-      });
-    } finally {
-      setState(() {
-        _isSaving = false;
-      });
+    // Save when app goes to background or is paused
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _saveEntryIfNotBlank();
     }
   }
 
 
   @override
   void dispose() {
-    _autoSaveTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _titleController.dispose();
     _contentController.dispose();
     _tagsController.dispose();
@@ -211,40 +175,43 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
             padding: EdgeInsets.zero,
           ),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              formattedDate,
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (_isSaving || _hasUnsavedChanges || _lastSaved != null)
-              Text(
-                _isSaving 
-                    ? 'Saving...'
-                    : _hasUnsavedChanges 
-                        ? 'Unsaved changes'
-                        : 'Saved ${_getTimeAgo(_lastSaved!)}',
-                style: TextStyle(
-                  color: _isSaving 
-                      ? colorScheme.primary
-                      : _hasUnsavedChanges
-                          ? colorScheme.error
-                          : colorScheme.onSurface.withValues(alpha: 0.5),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-          ],
+        title: Text(
+          formattedDate,
+          style: TextStyle(
+            color: colorScheme.onSurface,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         centerTitle: false,
+        actions: [
+          if (_isTextFieldFocused)
+            Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                onPressed: () {
+                  FocusScope.of(context).unfocus();
+                  _saveEntryIfNotBlank();
+                },
+                icon: Icon(
+                  Icons.keyboard_hide,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+        ],
         ),
         body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
+        onTap: () {
+          FocusScope.of(context).unfocus();
+          _saveEntryIfNotBlank();
+        },
         child: Column(
           children: [
             // Metadata row with line
@@ -490,23 +457,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     }
   }
 
-  void _getCurrentLocation() async {
-    final locationData = await MediaService.getCurrentLocation();
-
-    if (locationData != null && mounted) {
-      if (locationData.containsKey('error')) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(locationData['error'])));
-      } else {
-        setState(() {
-          _latitude = locationData['latitude'];
-          _longitude = locationData['longitude'];
-          _locationController.text = locationData['locationName'] ?? '';
-        });
-      }
-    }
-  }
 
   void _addPhoto() {
     final options = <Widget>[];
@@ -600,26 +550,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     );
   }
 
-  void _addAudio() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        child: AudioRecorderWidget(
-          entryId: _entryId,
-          onRecordingComplete: (attachment) {
-            Navigator.pop(context);
-            setState(() {
-              _attachments.add(attachment);
-            });
-          },
-          onCancel: () {
-            Navigator.pop(context);
-          },
-        ),
-      ),
-    );
-  }
 
   void _addFile() async {
     final attachment = await MediaService.pickFile(_entryId);
@@ -701,20 +631,6 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
     }
   }
 
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inSeconds < 60) {
-      return 'just now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else {
-      return '${difference.inDays}d ago';
-    }
-  }
 
 
   Widget _buildActionButton({
