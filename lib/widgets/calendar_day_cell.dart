@@ -239,7 +239,11 @@ class CalendarDayCell extends StatelessWidget {
 
   Widget _buildEntryDotsIndicator(BuildContext context) {
     final entryCount = entries.length;
-    if (entryCount == 0) return const SizedBox.shrink();
+    
+    // Return empty widget if no entries
+    if (entryCount == 0) {
+      return const SizedBox.shrink();
+    }
     
     // Determine number of dots to show (max 3)
     final dotsToShow = entryCount > 3 ? 3 : entryCount;

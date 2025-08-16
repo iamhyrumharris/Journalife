@@ -13,6 +13,8 @@ import '../../widgets/text_formatting_toolbar.dart';
 import '../../widgets/attachment_list_widget.dart';
 import '../../widgets/photo_collage_widget.dart';
 import '../../widgets/full_screen_gallery_widget.dart';
+import '../../widgets/responsive_entry_layout.dart';
+import '../../utils/responsive_breakpoints.dart';
 
 class EntryEditScreen extends ConsumerStatefulWidget {
   final Entry? entry;
@@ -184,8 +186,8 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
         }
       },
       child: Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
+        backgroundColor: colorScheme.surface,
+        appBar: AppBar(
         backgroundColor: colorScheme.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -240,8 +242,8 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
           ],
         ),
         centerTitle: false,
-      ),
-      body: GestureDetector(
+        ),
+        body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: Column(
           children: [
@@ -318,155 +320,97 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
             // Editor area
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Photo collage
-                    PhotoCollageWidget(
-                      photos: _attachments
-                          .where((attachment) => attachment.type == AttachmentType.photo)
-                          .toList(),
-                      onPhotoTap: _openGallery,
-                    ),
-                    
-                    // Title TextField
-                    TextField(
-                      controller: _titleController,
-                      focusNode: _titleFocusNode,
-                      style: TextStyle(
-                        color: colorScheme.onSurface,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w500,
-                        height: 1.2,
-                      ),
-                      cursorColor: colorScheme.primary,
-                      decoration: const InputDecoration(
-                        hintText: 'A moment to remember',
-                        hintStyle: TextStyle(
-                          color: Color(0xFF9E9E9E),
-                          fontSize: 28,
-                          fontWeight: FontWeight.w500,
-                          height: 1.2,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        isDense: true,
-                        filled: false,
-                      ),
-                      maxLines: null,
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Body TextField
-                    TextField(
-                      controller: _contentController,
-                      focusNode: _contentFocusNode,
-                      style: TextStyle(
-                        color: colorScheme.onSurface,
-                        fontSize: 17,
-                        height: 1.6,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      cursorColor: colorScheme.primary,
-                      decoration: const InputDecoration(
-                        hintText: 'Today brought new perspectives and quiet revelations that shifted my understanding. The morning light filtered through familiar windows, casting shadows that seemed to whisper stories of transformation...',
-                        hintStyle: TextStyle(
-                          color: Color(0xFF9E9E9E),
-                          fontSize: 17,
-                          height: 1.6,
-                          fontWeight: FontWeight.w400,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        isDense: true,
-                        filled: false,
-                      ),
-                      maxLines: null,
-                      minLines: 8,
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
-
-                    // Attachment list
-                    AttachmentListWidget(
-                      attachments: _attachments,
-                      onRemove: _removeAttachment,
-                    ),
-                  ],
+                child: ResponsiveEntryLayout(
+                  photos: _attachments
+                      .where((attachment) => attachment.type == AttachmentType.photo)
+                      .toList(),
+                  titleController: _titleController,
+                  contentController: _contentController,
+                  titleFocusNode: _titleFocusNode,
+                  contentFocusNode: _contentFocusNode,
+                  attachments: _attachments,
+                  onPhotoTap: _openGallery,
+                  onRemoveAttachment: _removeAttachment,
                 ),
               ),
             ),
 
             // Bottom action row - show when text fields are not focused (clean writing experience)
             if (!_isTextFieldFocused)
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: colorScheme.outline.withValues(alpha: 0.2),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final layoutType = ResponsiveBreakpoints.getLayoutTypeFromWidth(constraints.maxWidth);
+                  final isDesktop = layoutType == LayoutType.desktop;
+                  
+                  return Container(
+                    margin: EdgeInsets.fromLTRB(
+                      isDesktop ? 32 : 16,
+                      0,
+                      isDesktop ? 32 : 16,
+                      16,
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildActionButton(
-                      icon: Icons.image_outlined,
-                      onPressed: _addPhoto,
-                      isActive: false,
-                      colorScheme: colorScheme,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: colorScheme.outline.withValues(alpha: 0.2),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.shadow.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    _buildActionButton(
-                      icon: Icons.attach_file_outlined,
-                      onPressed: _addFile,
-                      isActive: false,
-                      colorScheme: colorScheme,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildActionButton(
+                          icon: Icons.image_outlined,
+                          onPressed: _addPhoto,
+                          isActive: false,
+                          colorScheme: colorScheme,
+                        ),
+                        _buildActionButton(
+                          icon: Icons.attach_file_outlined,
+                          onPressed: _addFile,
+                          isActive: false,
+                          colorScheme: colorScheme,
+                        ),
+                        _buildActionButton(
+                          icon: _latitude != null && _longitude != null
+                              ? Icons.location_on
+                              : Icons.location_on_outlined,
+                          onPressed: _addLocation,
+                          isActive: _latitude != null && _longitude != null,
+                          colorScheme: colorScheme,
+                        ),
+                        _buildActionButton(
+                          icon: _showFormattingToolbar 
+                              ? Icons.text_format 
+                              : Icons.text_format_outlined,
+                          onPressed: () {
+                            setState(() {
+                              _showFormattingToolbar = !_showFormattingToolbar;
+                            });
+                          },
+                          isActive: _showFormattingToolbar,
+                          colorScheme: colorScheme,
+                        ),
+                        _buildActionButton(
+                          icon: Icons.bookmark_outline,
+                          onPressed: () {
+                            // TODO: Implement bookmark functionality
+                          },
+                          isActive: false,
+                          colorScheme: colorScheme,
+                        ),
+                      ],
                     ),
-                    _buildActionButton(
-                      icon: _latitude != null && _longitude != null
-                          ? Icons.location_on
-                          : Icons.location_on_outlined,
-                      onPressed: _addLocation,
-                      isActive: _latitude != null && _longitude != null,
-                      colorScheme: colorScheme,
-                    ),
-                    _buildActionButton(
-                      icon: _showFormattingToolbar 
-                          ? Icons.text_format 
-                          : Icons.text_format_outlined,
-                      onPressed: () {
-                        setState(() {
-                          _showFormattingToolbar = !_showFormattingToolbar;
-                        });
-                      },
-                      isActive: _showFormattingToolbar,
-                      colorScheme: colorScheme,
-                    ),
-                    _buildActionButton(
-                      icon: Icons.bookmark_outline,
-                      onPressed: () {
-                        // TODO: Implement bookmark functionality
-                      },
-                      isActive: false,
-                      colorScheme: colorScheme,
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
 
             // Text formatting toolbar - show when enabled
@@ -477,8 +421,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> {
           ],
         ),
       ),
-    ),
-    );
+    ));
   }
 
   Future<void> _saveEntryIfNotBlank() async {
