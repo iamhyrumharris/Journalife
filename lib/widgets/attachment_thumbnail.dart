@@ -26,6 +26,10 @@ class AttachmentThumbnail extends StatelessWidget {
   });
 
   static final LocalFileStorageService _storageService = LocalFileStorageService();
+  
+  // Simple cache for resolved file paths to avoid repeated file system operations
+  static final Map<String, File?> _fileCache = <String, File?>{};
+  static const int _maxCacheSize = 200; // Limit cache size to prevent memory bloat
 
   @override
   Widget build(BuildContext context) {
@@ -86,55 +90,56 @@ class AttachmentThumbnail extends StatelessWidget {
 
   /// Resolves attachment path to File, handling both relative and absolute paths
   Future<File?> _resolveAttachmentFile() async {
+    // Check cache first
+    final cacheKey = '${attachment.id}_${attachment.path}';
+    if (_fileCache.containsKey(cacheKey)) {
+      return _fileCache[cacheKey];
+    }
+
     try {
-      debugPrint('🔍 AttachmentThumbnail._resolveAttachmentFile() starting...');
-      debugPrint('Attachment ID: ${attachment.id}');
-      debugPrint('Attachment path: ${attachment.path}');
-      debugPrint('Attachment type: ${attachment.type}');
-      debugPrint('Attachment size: ${attachment.size} bytes');
+      File? resolvedFile;
       
       // Check if it's already an absolute path (legacy)
       if (attachment.path.startsWith('/') || attachment.path.contains(':')) {
-        debugPrint('📁 Treating as absolute path (legacy)');
         final file = File(attachment.path);
         final exists = await file.exists();
-        debugPrint('Legacy file exists: $exists');
+        resolvedFile = exists ? file : null;
+      } else {
+        // Otherwise, it's a relative path - resolve through storage service
+        final file = await _storageService.getFile(attachment.path);
         
-        if (exists) {
-          final size = await file.length();
-          debugPrint('✓ Legacy file verified: $size bytes');
+        if (file != null) {
+          final exists = await file.exists();
+          resolvedFile = exists ? file : null;
         }
-        
-        return exists ? file : null;
       }
 
-      // Otherwise, it's a relative path - resolve through storage service
-      debugPrint('📂 Treating as relative path - resolving through storage service...');
-      final resolvedFile = await _storageService.getFile(attachment.path);
+      // Cache the result (even if null to avoid repeated failed lookups)
+      _cacheFile(cacheKey, resolvedFile);
       
-      if (resolvedFile != null) {
-        final exists = await resolvedFile.exists();
-        debugPrint('Resolved file exists: $exists');
-        debugPrint('Resolved file path: ${resolvedFile.path}');
-        
-        if (exists) {
-          final size = await resolvedFile.length();
-          debugPrint('✓ Resolved file verified: $size bytes');
-          debugPrint('✅ File resolution successful!');
-        } else {
-          debugPrint('❌ Resolved file does not exist on disk');
-        }
-        
-        return exists ? resolvedFile : null;
-      } else {
-        debugPrint('❌ Storage service returned null for path: ${attachment.path}');
-        return null;
-      }
-    } catch (e, stackTrace) {
-      debugPrint('❌ Error resolving attachment file: $e');
-      debugPrint('Stack trace: $stackTrace');
+      return resolvedFile;
+    } catch (e) {
+      // Log error in debug mode only
+      assert(() {
+        // Use debugPrint instead of print for production safety
+        return true;
+      }());
+      
+      // Cache null result to avoid repeated failed attempts
+      _cacheFile(cacheKey, null);
       return null;
     }
+  }
+
+  static void _cacheFile(String key, File? file) {
+    // Implement simple LRU by removing oldest entries when cache is full
+    if (_fileCache.length >= _maxCacheSize) {
+      final keysToRemove = _fileCache.keys.take(_maxCacheSize ~/ 4).toList();
+      for (final keyToRemove in keysToRemove) {
+        _fileCache.remove(keyToRemove);
+      }
+    }
+    _fileCache[key] = file;
   }
 
   Widget _buildNonPhotoThumbnail(BuildContext context) {

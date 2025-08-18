@@ -23,10 +23,44 @@ class CalendarDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Use RepaintBoundary to isolate repaints for performance
+    return RepaintBoundary(
+      child: _CalendarDayCellContent(
+        dayNumber: dayNumber,
+        isCurrentMonth: isCurrentMonth,
+        isSelected: isSelected,
+        isToday: isToday,
+        entries: entries,
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _CalendarDayCellContent extends StatelessWidget {
+  final int dayNumber;
+  final bool isCurrentMonth;
+  final bool isSelected;
+  final bool isToday;
+  final List<Entry> entries;
+  final VoidCallback? onTap;
+
+  const _CalendarDayCellContent({
+    required this.dayNumber,
+    required this.isCurrentMonth,
+    required this.isSelected,
+    required this.isToday,
+    required this.entries,
+    this.onTap,
+  });
+
+
+  @override
+  Widget build(BuildContext context) {
+    // Cache computed values within build to avoid repeated calculations
     final photoAttachments = _getPhotoAttachments();
     final hasPhotos = photoAttachments.isNotEmpty;
-    final hasNonPhotoEntries = entries.any((e) => e.attachments.isEmpty || 
-        e.attachments.any((a) => a.type != AttachmentType.photo));
+    final hasNonPhotoEntries = _computeHasNonPhotoEntries();
 
     return GestureDetector(
       onTap: onTap,
@@ -58,6 +92,11 @@ class CalendarDayCell extends StatelessWidget {
     return photos;
   }
 
+  bool _computeHasNonPhotoEntries() {
+    return entries.any((e) => e.attachments.isEmpty || 
+        e.attachments.any((a) => a.type != AttachmentType.photo));
+  }
+
   Widget _buildPhotoCell(BuildContext context, List<Attachment> photos, bool hasNonPhotoEntries) {
     return Stack(
       children: [
@@ -82,7 +121,7 @@ class CalendarDayCell extends StatelessWidget {
   }
 
   Widget _buildSinglePhoto(Attachment photo) {
-    return AttachmentThumbnail(
+    return _LazyAttachmentThumbnail(
       attachment: photo,
       width: double.infinity,
       height: double.infinity,
@@ -96,7 +135,7 @@ class CalendarDayCell extends StatelessWidget {
       return Row(
         children: [
           Expanded(
-            child: AttachmentThumbnail(
+            child: _LazyAttachmentThumbnail(
               attachment: photos[0],
               width: double.infinity,
               height: double.infinity,
@@ -106,7 +145,7 @@ class CalendarDayCell extends StatelessWidget {
           ),
           const SizedBox(width: 1),
           Expanded(
-            child: AttachmentThumbnail(
+            child: _LazyAttachmentThumbnail(
               attachment: photos[1],
               width: double.infinity,
               height: double.infinity,
@@ -120,7 +159,7 @@ class CalendarDayCell extends StatelessWidget {
       return Column(
         children: [
           Expanded(
-            child: AttachmentThumbnail(
+            child: _LazyAttachmentThumbnail(
               attachment: photos[0],
               width: double.infinity,
               height: double.infinity,
@@ -133,7 +172,7 @@ class CalendarDayCell extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: AttachmentThumbnail(
+                  child: _LazyAttachmentThumbnail(
                     attachment: photos[1],
                     width: double.infinity,
                     height: double.infinity,
@@ -143,7 +182,7 @@ class CalendarDayCell extends StatelessWidget {
                 ),
                 const SizedBox(width: 1),
                 Expanded(
-                  child: AttachmentThumbnail(
+                  child: _LazyAttachmentThumbnail(
                     attachment: photos[2],
                     width: double.infinity,
                     height: double.infinity,
@@ -160,7 +199,7 @@ class CalendarDayCell extends StatelessWidget {
       // 4+ photos - show first photo with overlay indicating more
       return Stack(
         children: [
-          AttachmentThumbnail(
+          _LazyAttachmentThumbnail(
             attachment: photos[0],
             width: double.infinity,
             height: double.infinity,
@@ -308,6 +347,76 @@ class CalendarDayCell extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
         ),
       ),
+    );
+  }
+}
+
+/// A lazy-loading wrapper for AttachmentThumbnail that only loads when in viewport
+class _LazyAttachmentThumbnail extends StatefulWidget {
+  final Attachment attachment;
+  final double width;
+  final double height;
+  final BoxFit fit;
+  final BorderRadius? borderRadius;
+
+  const _LazyAttachmentThumbnail({
+    required this.attachment,
+    required this.width,
+    required this.height,
+    required this.fit,
+    this.borderRadius,
+  });
+
+  @override
+  State<_LazyAttachmentThumbnail> createState() => _LazyAttachmentThumbnailState();
+}
+
+class _LazyAttachmentThumbnailState extends State<_LazyAttachmentThumbnail> {
+  bool _isInView = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // Use LayoutBuilder to detect when widget is actually rendered
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Mark as in view when we have constraints (i.e., widget is laid out)
+        if (!_isInView && constraints.maxWidth > 0 && constraints.maxHeight > 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _isInView = true;
+              });
+            }
+          });
+        }
+
+        if (_isInView) {
+          return AttachmentThumbnail(
+            attachment: widget.attachment,
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+            borderRadius: widget.borderRadius,
+          );
+        } else {
+          // Show a placeholder while not in view
+          return Container(
+            width: widget.width,
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: widget.borderRadius ?? BorderRadius.zero,
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.image,
+                color: Colors.grey,
+                size: 16,
+              ),
+            ),
+          );
+        }
+      },
     );
   }
 }

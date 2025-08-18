@@ -318,17 +318,48 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     );
   }
 
+  // Cache today's date to avoid repeated DateTime.now() calls
+  static DateTime? _cachedToday;
+  static int? _cachedTodayTimestamp;
+
   Widget _buildDayCell(BuildContext context, DateTime date, bool isCurrentMonth, DateTime displayMonth) {
-    final dayEntries = widget.entries.where((entry) => _isSameDay(entry.createdAt, date)).toList();
-    final isSelected = widget.selectedDay != null && _isSameDay(widget.selectedDay!, date);
-    final isToday = _isSameDay(DateTime.now(), date);
+    final now = DateTime.now();
+    final todayTimestamp = now.millisecondsSinceEpoch ~/ (1000 * 60 * 60 * 24); // Day precision
+    
+    if (_cachedTodayTimestamp != todayTimestamp) {
+      _cachedToday = DateTime(now.year, now.month, now.day);
+      _cachedTodayTimestamp = todayTimestamp;
+    }
+    
+    // Pre-calculate date comparisons
+    final cachedToday = _cachedToday;
+    final isToday = cachedToday != null && 
+                   date.year == cachedToday.year && 
+                   date.month == cachedToday.month && 
+                   date.day == cachedToday.day;
+    
+    final selectedDay = widget.selectedDay;
+    final isSelected = selectedDay != null && 
+                      date.year == selectedDay.year && 
+                      date.month == selectedDay.month && 
+                      date.day == selectedDay.day;
+    
+    // Filter entries more efficiently
+    final dayEntries = isCurrentMonth 
+        ? widget.entries.where((entry) {
+            final entryDate = entry.createdAt;
+            return entryDate.year == date.year && 
+                   entryDate.month == date.month && 
+                   entryDate.day == date.day;
+          }).toList()
+        : const <Entry>[];
     
     return CalendarDayCell(
       dayNumber: date.day,
       isCurrentMonth: isCurrentMonth,
       isSelected: isSelected,
       isToday: isToday,
-      entries: isCurrentMonth ? dayEntries : const [],
+      entries: dayEntries,
       onTap: () => widget.onDaySelected(date),
     );
   }
@@ -346,8 +377,5 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     );
   }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
 
 }
