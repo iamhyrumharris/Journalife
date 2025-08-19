@@ -6,7 +6,6 @@ import 'screens/entry/entry_edit_screen.dart';
 import 'screens/journals/journal_list_screen.dart';
 import 'models/entry.dart';
 import 'services/error_service.dart';
-import 'providers/user_provider.dart';
 import 'providers/theme_provider.dart';
 import 'theme/app_theme.dart';
 
@@ -36,9 +35,6 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Initialize sample users for development
-    ref.watch(createSampleUsersProvider);
-    
     // Watch theme mode from provider
     final themeMode = ref.watch(themeModeProvider);
 

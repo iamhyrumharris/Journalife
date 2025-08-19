@@ -13,7 +13,6 @@ import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/error_state_widget.dart';
 import '../entry/entry_edit_screen.dart';
 import '../settings/settings_screen.dart';
-import '../profile/profile_screen.dart';
 import '../../widgets/search_overlay.dart';
 
 class TimelineScreen extends ConsumerWidget {
@@ -31,7 +30,6 @@ class TimelineScreen extends ConsumerWidget {
           child: JournalSelector(isAppBarTitle: true),
         ),
         leadingWidth: 200,
-        title: const Text('Timeline'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -52,18 +50,6 @@ class TimelineScreen extends ConsumerWidget {
               );
             },
             tooltip: 'Settings',
-          ),
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfileScreen(),
-                ),
-              );
-            },
-            tooltip: 'Profile',
           ),
         ],
       ),

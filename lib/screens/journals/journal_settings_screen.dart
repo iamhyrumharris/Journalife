@@ -7,9 +7,6 @@ import '../../models/journal.dart';
 import '../../models/entry.dart';
 import '../../providers/entry_provider.dart';
 import '../../providers/journal_provider.dart';
-import '../../widgets/user_avatar.dart';
-import '../../widgets/user_list_tile.dart';
-import '../../widgets/user_search_dialog.dart';
 import '../../providers/sync_config_provider.dart';
 import '../../providers/sync_provider.dart';
 import '../../models/sync_config.dart';
@@ -35,7 +32,7 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -68,14 +65,13 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
           controller: _tabController,
           tabs: const [
             Tab(icon: Icon(Icons.info), text: 'Info'),
-            Tab(icon: Icon(Icons.people), text: 'Sharing'),
             Tab(icon: Icon(Icons.sync), text: 'Sync'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildInfoTab(), _buildSharingTab(), _buildSyncTab()],
+        children: [_buildInfoTab(), _buildSyncTab()],
       ),
     );
   }
@@ -289,13 +285,6 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
     return Card(
       child: Column(
         children: [
-          UserListTile(
-            userId: widget.journal.ownerId,
-            subtitle: 'Owner',
-            trailing: Icon(Icons.star, color: Colors.amber),
-            enabled: false,
-          ),
-          const Divider(),
           ListTile(
             leading: const Icon(Icons.calendar_today),
             title: const Text('Created'),
@@ -337,98 +326,6 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
     );
   }
 
-  Widget _buildSharingTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Sharing Settings',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('Enable Sharing'),
-                  subtitle: const Text('Allow others to access this journal'),
-                  value: widget.journal.isShared,
-                  onChanged: (value) {
-                    _toggleSharing(value);
-                  },
-                ),
-                if (widget.journal.isShared) ...[
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.people),
-                    title: const Text('Shared Users'),
-                    subtitle: Row(
-                      children: [
-                        if (widget.journal.sharedWithUserIds.isNotEmpty)
-                          UserAvatarStack(
-                            userIds: widget.journal.sharedWithUserIds,
-                            radius: 12,
-                            maxVisible: 3,
-                          ),
-                        if (widget.journal.sharedWithUserIds.isNotEmpty)
-                          const SizedBox(width: 8),
-                        Text(
-                          '${widget.journal.sharedWithUserIds.length} user${widget.journal.sharedWithUserIds.length == 1 ? '' : 's'}',
-                        ),
-                      ],
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      _showSharedUsers();
-                    },
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.link),
-                    title: const Text('Share Link'),
-                    subtitle: const Text(
-                      'Generate a link to share this journal',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      _generateShareLink();
-                    },
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          if (!widget.journal.isShared) ...[
-            const SizedBox(height: 16),
-            Card(
-              color: Colors.blue.withValues(alpha: 0.1),
-              child: const Padding(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(Icons.info, color: Colors.blue),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        'When you enable sharing, you can invite others to read and contribute to this journal.',
-                        style: TextStyle(color: Colors.blue),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   Widget _buildSyncTab() {
     return Consumer(
@@ -775,168 +672,6 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
     );
   }
 
-  void _toggleSharing(bool enabled) async {
-    try {
-      final updatedJournal = enabled
-          ? widget
-                .journal // Keep current shared users when enabling
-          : widget.journal.copyWith(
-              sharedWithUserIds: [],
-            ); // Clear shared users when disabling
-
-      // Update the journal in the database
-      await ref.read(journalProvider.notifier).updateJournal(updatedJournal);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              enabled
-                  ? 'Sharing enabled - you can now add users'
-                  : 'Sharing disabled - all users removed',
-            ),
-            backgroundColor: enabled ? Colors.green : Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update sharing: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showSharedUsers() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Shared Users'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.journal.sharedWithUserIds.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'No users are currently sharing this journal.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              )
-            else
-              ...widget.journal.sharedWithUserIds.map(
-                (userId) => UserListTile(
-                  userId: userId,
-                  subtitle: 'Shared user',
-                  trailing: IconButton(
-                    icon: const Icon(Icons.remove_circle, color: Colors.red),
-                    onPressed: () {
-                      _removeUserFromSharing(userId);
-                    },
-                    tooltip: 'Remove from sharing',
-                  ),
-                ),
-              ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _showAddUserDialog();
-              },
-              icon: const Icon(Icons.person_add),
-              label: const Text('Add User'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showAddUserDialog() async {
-    // Exclude current users (owner + already shared users)
-    final excludeUserIds = [
-      widget.journal.ownerId,
-      ...widget.journal.sharedWithUserIds,
-    ];
-
-    final selectedUsers = await UserSearchDialogHelper.showMultiple(
-      context,
-      title: 'Add Users to Journal',
-      hintText: 'Search by name or email...',
-      excludeUserIds: excludeUserIds,
-    );
-
-    if (selectedUsers != null && selectedUsers.isNotEmpty) {
-      for (final user in selectedUsers) {
-        _addUserToSharing(user.id);
-      }
-    }
-  }
-
-  void _generateShareLink() {
-    // Generate a more secure share link with timestamp and encoded data
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final encodedData = _encodeJournalShareData(widget.journal.id, timestamp);
-    final shareLink = 'https://journal.app/join/$encodedData';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Share Link'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Share "${widget.journal.name}" with others:'),
-            const SizedBox(height: 8),
-            const Text(
-              'Anyone with this link can request access to your journal.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SelectableText(shareLink),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final navigator = Navigator.of(context);
-              final messenger = ScaffoldMessenger.of(context);
-              await Clipboard.setData(ClipboardData(text: shareLink));
-              navigator.pop();
-              if (mounted) {
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Link copied to clipboard')),
-                );
-              }
-            },
-            child: const Text('Copy Link'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _openSyncManagement() {
     Navigator.push(
@@ -1144,117 +879,4 @@ class _JournalSettingsScreenState extends ConsumerState<JournalSettingsScreen>
     }
   }
 
-  void _addUserToSharing(String userId) async {
-    try {
-      // Check if user is already shared
-      if (widget.journal.sharedWithUserIds.contains(userId)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('User is already added to this journal'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Add user to shared list
-      final updatedSharedUsers = [...widget.journal.sharedWithUserIds, userId];
-      final updatedJournal = widget.journal.copyWith(
-        sharedWithUserIds: updatedSharedUsers,
-      );
-
-      // Update the journal in the database
-      await ref.read(journalProvider.notifier).updateJournal(updatedJournal);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Added $userId to journal sharing'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to add user: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _removeUserFromSharing(String userId) async {
-    try {
-      // Show confirmation dialog
-      final shouldRemove = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Remove User'),
-          content: Text('Remove $userId from journal sharing?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Remove'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldRemove == true) {
-        // Remove user from shared list
-        final updatedSharedUsers = widget.journal.sharedWithUserIds
-            .where((id) => id != userId)
-            .toList();
-        final updatedJournal = widget.journal.copyWith(
-          sharedWithUserIds: updatedSharedUsers,
-        );
-
-        // Update the journal in the database
-        await ref.read(journalProvider.notifier).updateJournal(updatedJournal);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Removed $userId from journal sharing'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to remove user: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  /// Encodes journal share data for secure link generation
-  String _encodeJournalShareData(String journalId, int timestamp) {
-    // Simple encoding - in a real app, this would use proper encryption
-    // For now, we'll use a base64 encoding of the journal data
-    final dataString = '$journalId:$timestamp:${widget.journal.name}';
-    final bytes = dataString.codeUnits;
-    final base64String = base64Encode(bytes);
-
-    // Make the link shorter and more user-friendly
-    return base64String
-        .replaceAll('/', '_')
-        .replaceAll('+', '-')
-        .substring(0, 16);
-  }
 }

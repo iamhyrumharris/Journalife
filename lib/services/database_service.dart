@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import '../models/user.dart';
 import '../models/journal.dart';
 import '../models/entry.dart';
 import '../models/attachment.dart';
@@ -12,7 +11,7 @@ import '../providers/sync_provider.dart';
 class DatabaseService {
   static Database? _database;
   static const String _databaseName = 'journal.db';
-  static const int _databaseVersion = 4;
+  static const int _databaseVersion = 5;
 
   Future<Database> get database async {
     _database ??= await _initDatabase();
@@ -33,27 +32,14 @@ class DatabaseService {
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE users (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      )
-    ''');
-
-    await db.execute('''
       CREATE TABLE journals (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL,
-        owner_id TEXT NOT NULL,
-        shared_with_user_ids TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         color TEXT,
-        icon TEXT,
-        FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
+        icon TEXT
       )
     ''');
 
@@ -141,6 +127,33 @@ class DatabaseService {
       // Recreate indexes
       await db.execute('CREATE INDEX idx_entries_journal_id ON entries(journal_id)');
       await db.execute('CREATE INDEX idx_entries_created_at ON entries(created_at)');
+    }
+    if (oldVersion < 5) {
+      // Remove multi-user features: Drop users table and simplify journals
+      await db.execute('DROP TABLE IF EXISTS users');
+      
+      // Create new journals table without user references
+      await db.execute('''
+        CREATE TABLE journals_new (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          color TEXT,
+          icon TEXT
+        )
+      ''');
+      
+      // Copy data from old journals table, excluding user-related fields
+      await db.execute('''
+        INSERT INTO journals_new (id, name, description, created_at, updated_at, color, icon)
+        SELECT id, name, description, created_at, updated_at, color, icon
+        FROM journals
+      ''');
+      
+      await db.execute('DROP TABLE journals');
+      await db.execute('ALTER TABLE journals_new RENAME TO journals');
     }
   }
 
@@ -240,42 +253,6 @@ class DatabaseService {
     );
   }
 
-  // User operations
-  Future<void> insertUser(User user) async {
-    final db = await database;
-    await db.insert(
-      'users',
-      user.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  Future<User?> getUser(String id) async {
-    final db = await database;
-    final maps = await db.query('users', where: 'id = ?', whereArgs: [id]);
-    return maps.isNotEmpty ? User.fromMap(maps.first) : null;
-  }
-
-  Future<List<User>> getAllUsers() async {
-    final db = await database;
-    final maps = await db.query('users');
-    return maps.map((map) => User.fromMap(map)).toList();
-  }
-
-  Future<void> updateUser(User user) async {
-    final db = await database;
-    await db.update(
-      'users',
-      user.toMap(),
-      where: 'id = ?',
-      whereArgs: [user.id],
-    );
-  }
-
-  Future<void> deleteUser(String id) async {
-    final db = await database;
-    await db.delete('users', where: 'id = ?', whereArgs: [id]);
-  }
 
   // Journal operations
   Future<void> insertJournal(Journal journal) async {
@@ -293,13 +270,9 @@ class DatabaseService {
     return maps.isNotEmpty ? Journal.fromMap(maps.first) : null;
   }
 
-  Future<List<Journal>> getJournalsForUser(String userId) async {
+  Future<List<Journal>> getAllJournals() async {
     final db = await database;
-    final maps = await db.query(
-      'journals',
-      where: 'owner_id = ? OR shared_with_user_ids LIKE ?',
-      whereArgs: [userId, '%$userId%'],
-    );
+    final maps = await db.query('journals', orderBy: 'created_at DESC');
     return maps.map((map) => Journal.fromMap(map)).toList();
   }
 

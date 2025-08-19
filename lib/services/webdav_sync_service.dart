@@ -553,9 +553,7 @@ class WebDAVSyncService {
       final databaseService = DatabaseService();
 
       // Get all journals that are configured to sync
-      final allJournals = await databaseService.getJournalsForUser(
-        'default-user',
-      );
+      final allJournals = await databaseService.getAllJournals();
       final syncedJournals = allJournals
           .where(
             (journal) => _currentConfig!.syncedJournalIds.contains(journal.id),
@@ -668,9 +666,7 @@ class WebDAVSyncService {
       debugPrint('🕒 Checking for changes since: $lastSyncTime');
 
       // Get journals that are configured to sync
-      final allJournals = await databaseService.getJournalsForUser(
-        'default-user',
-      );
+      final allJournals = await databaseService.getAllJournals();
       final syncedJournals = allJournals
           .where(
             (journal) => _currentConfig!.syncedJournalIds.contains(journal.id),

@@ -58,8 +58,9 @@ class _CalendarDayCellContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Cache computed values within build to avoid repeated calculations
-    final photoAttachments = _getPhotoAttachments();
-    final hasPhotos = photoAttachments.isNotEmpty;
+    final representativePhoto = _getRepresentativePhoto();
+    final hasPhoto = representativePhoto != null;
+    final totalPhotos = _getTotalPhotoCount();
     final hasNonPhotoEntries = _computeHasNonPhotoEntries();
 
     return GestureDetector(
@@ -76,20 +77,42 @@ class _CalendarDayCellContent extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(6),
-          child: hasPhotos 
-              ? _buildPhotoCell(context, photoAttachments, hasNonPhotoEntries)
+          child: hasPhoto 
+              ? _buildPhotoCell(context, representativePhoto, totalPhotos, hasNonPhotoEntries)
               : _buildEmptyCell(context, hasNonPhotoEntries),
         ),
       ),
     );
   }
 
-  List<Attachment> _getPhotoAttachments() {
-    final photos = <Attachment>[];
+  Attachment? _getRepresentativePhoto() {
+    if (entries.isEmpty) return null;
+    
+    // Find entries with photos
+    final entriesWithPhotos = entries
+        .where((entry) => entry.photoAttachments.isNotEmpty)
+        .toList();
+    
+    if (entriesWithPhotos.isEmpty) return null;
+    
+    // Sort by content richness (content length + attachment count)
+    // This prioritizes entries with more substantial content
+    entriesWithPhotos.sort((a, b) {
+      final scoreA = a.content.length + (a.attachments.length * 10);
+      final scoreB = b.content.length + (b.attachments.length * 10);
+      return scoreB.compareTo(scoreA);
+    });
+    
+    // Return the first photo from the most substantial entry
+    return entriesWithPhotos.first.photoAttachments.first;
+  }
+
+  int _getTotalPhotoCount() {
+    int count = 0;
     for (final entry in entries) {
-      photos.addAll(entry.photoAttachments);
+      count += entry.photoAttachments.length;
     }
-    return photos;
+    return count;
   }
 
   bool _computeHasNonPhotoEntries() {
@@ -97,14 +120,11 @@ class _CalendarDayCellContent extends StatelessWidget {
         e.attachments.any((a) => a.type != AttachmentType.photo));
   }
 
-  Widget _buildPhotoCell(BuildContext context, List<Attachment> photos, bool hasNonPhotoEntries) {
+  Widget _buildPhotoCell(BuildContext context, Attachment photo, int totalPhotos, bool hasNonPhotoEntries) {
     return Stack(
       children: [
-        // Background photo(s)
-        if (photos.length == 1)
-          _buildSinglePhoto(photos.first)
-        else
-          _buildMultiplePhotos(photos),
+        // Background photo
+        _buildSinglePhoto(photo),
         
         // Day number centered
         _buildCenteredDayNumber(context),
@@ -130,106 +150,6 @@ class _CalendarDayCellContent extends StatelessWidget {
     );
   }
 
-  Widget _buildMultiplePhotos(List<Attachment> photos) {
-    if (photos.length == 2) {
-      return Row(
-        children: [
-          Expanded(
-            child: _LazyAttachmentThumbnail(
-              attachment: photos[0],
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.cover,
-              borderRadius: BorderRadius.zero,
-            ),
-          ),
-          const SizedBox(width: 1),
-          Expanded(
-            child: _LazyAttachmentThumbnail(
-              attachment: photos[1],
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.cover,
-              borderRadius: BorderRadius.zero,
-            ),
-          ),
-        ],
-      );
-    } else if (photos.length == 3) {
-      return Column(
-        children: [
-          Expanded(
-            child: _LazyAttachmentThumbnail(
-              attachment: photos[0],
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.cover,
-              borderRadius: BorderRadius.zero,
-            ),
-          ),
-          const SizedBox(height: 1),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: _LazyAttachmentThumbnail(
-                    attachment: photos[1],
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                    borderRadius: BorderRadius.zero,
-                  ),
-                ),
-                const SizedBox(width: 1),
-                Expanded(
-                  child: _LazyAttachmentThumbnail(
-                    attachment: photos[2],
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                    borderRadius: BorderRadius.zero,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    } else {
-      // 4+ photos - show first photo with overlay indicating more
-      return Stack(
-        children: [
-          _LazyAttachmentThumbnail(
-            attachment: photos[0],
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.cover,
-            borderRadius: BorderRadius.zero,
-          ),
-          if (photos.length > 4)
-            Positioned(
-              bottom: 4,
-              right: 4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '+${photos.length - 1}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      );
-    }
-  }
 
   Widget _buildEmptyCell(BuildContext context, bool hasEntries) {
     return Container(
@@ -251,7 +171,7 @@ class _CalendarDayCellContent extends StatelessWidget {
   }
 
   Widget _buildCenteredDayNumber(BuildContext context) {
-    final hasPhotos = _getPhotoAttachments().isNotEmpty;
+    final hasPhotos = _getRepresentativePhoto() != null;
     
     // Don't show day numbers for non-current-month days
     if (!isCurrentMonth) {

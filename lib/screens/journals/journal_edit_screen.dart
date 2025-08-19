@@ -338,19 +338,6 @@ class _JournalEditScreenState extends ConsumerState<JournalEditScreen> {
         const SizedBox(height: 16),
         
         ListTile(
-          leading: const Icon(Icons.people),
-          title: const Text('Sharing Settings'),
-          subtitle: Text(journal.isShared ? 'Shared with others' : 'Private journal'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            // Navigate to sharing settings - will be implemented later
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Sharing settings coming soon')),
-            );
-          },
-        ),
-        
-        ListTile(
           leading: const Icon(Icons.sync),
           title: const Text('Sync Settings'),
           subtitle: const Text('WebDAV and backup options'),

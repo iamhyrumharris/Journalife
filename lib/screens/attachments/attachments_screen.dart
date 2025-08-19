@@ -10,7 +10,6 @@ import '../../services/attachment_service.dart';
 import '../../widgets/journal_selector.dart';
 import '../entry/entry_edit_screen.dart';
 import '../settings/settings_screen.dart';
-import '../profile/profile_screen.dart';
 import '../../widgets/search_overlay.dart';
 
 class AttachmentsScreen extends ConsumerStatefulWidget {
@@ -48,7 +47,6 @@ class _AttachmentsScreenState extends ConsumerState<AttachmentsScreen>
           child: JournalSelector(isAppBarTitle: true),
         ),
         leadingWidth: 200,
-        title: const Text('Attachments'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -69,18 +67,6 @@ class _AttachmentsScreenState extends ConsumerState<AttachmentsScreen>
               );
             },
             tooltip: 'Settings',
-          ),
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfileScreen(),
-                ),
-              );
-            },
-            tooltip: 'Profile',
           ),
         ],
         bottom: TabBar(

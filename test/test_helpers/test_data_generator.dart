@@ -4,41 +4,22 @@ import 'package:uuid/uuid.dart';
 import 'package:journal_new/models/attachment.dart';
 import 'package:journal_new/models/entry.dart';
 import 'package:journal_new/models/journal.dart';
-import 'package:journal_new/models/user.dart';
 
 /// Utility class for generating test data for migration and sharing tests
 class TestDataGenerator {
   static const Uuid _uuid = Uuid();
 
-  /// Creates a test user
-  static User createTestUser({
-    String? id,
-    String? name,
-    String? email,
-  }) {
-    return User(
-      id: id ?? _uuid.v4(),
-      name: name ?? 'Test User ${DateTime.now().millisecondsSinceEpoch}',
-      email: email ?? 'test${DateTime.now().millisecondsSinceEpoch}@example.com',
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
 
   /// Creates a test journal
   static Journal createTestJournal({
     String? id,
     String? name,
     String? description,
-    String? ownerId,
-    List<String>? sharedWithUserIds,
   }) {
     return Journal(
       id: id ?? _uuid.v4(),
       name: name ?? 'Test Journal ${DateTime.now().millisecondsSinceEpoch}',
       description: description ?? 'A test journal for testing purposes',
-      ownerId: ownerId ?? _uuid.v4(),
-      sharedWithUserIds: sharedWithUserIds ?? [],
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

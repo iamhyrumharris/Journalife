@@ -184,17 +184,6 @@ class JournalListScreen extends ConsumerWidget {
                                     ],
                                   ),
                                 ),
-                                if (journal.isShared)
-                                  const PopupMenuItem(
-                                    value: 'sharing',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.people),
-                                        SizedBox(width: 8),
-                                        Text('Sharing'),
-                                      ],
-                                    ),
-                                  ),
                                 const PopupMenuItem(
                                   value: 'delete',
                                   child: Row(
@@ -265,15 +254,6 @@ class JournalListScreen extends ConsumerWidget {
           'Created ${DateFormat('MMM d, yyyy').format(journal.createdAt)}',
           style: TextStyle(color: textColor, fontSize: 12),
         ),
-        if (journal.isShared) ...[
-          const SizedBox(width: 16),
-          Icon(Icons.people, size: 16, color: textColor),
-          const SizedBox(width: 4),
-          Text(
-            'Shared',
-            style: TextStyle(color: textColor, fontSize: 12),
-          ),
-        ],
       ],
     );
   }
@@ -308,7 +288,6 @@ class JournalListScreen extends ConsumerWidget {
         );
         break;
       case 'settings':
-      case 'sharing':
         Navigator.push(
           context,
           MaterialPageRoute(

@@ -9,7 +9,6 @@ import '../../providers/entry_provider.dart';
 import '../../widgets/journal_selector.dart';
 import '../entry/entry_edit_screen.dart';
 import '../settings/settings_screen.dart';
-import '../profile/profile_screen.dart';
 import '../../widgets/search_overlay.dart';
 
 class ReflectScreen extends ConsumerStatefulWidget {
@@ -32,7 +31,6 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
           child: JournalSelector(isAppBarTitle: true),
         ),
         leadingWidth: 200,
-        title: const Text('Reflect'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -53,18 +51,6 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
               );
             },
             tooltip: 'Settings',
-          ),
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfileScreen(),
-                ),
-              );
-            },
-            tooltip: 'Profile',
           ),
         ],
       ),
@@ -252,6 +238,7 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
                     Colors.blue,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _buildStatItem(
                     'This Week',
@@ -273,6 +260,7 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
                     Colors.orange,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _buildStatItem(
                     'Words Total',
@@ -294,6 +282,7 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
                     Colors.deepOrange,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _buildStatItem(
                     'Longest Streak',
@@ -626,6 +615,7 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
                     Colors.blue,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _buildStatItem(
                     'Avg Words',
@@ -647,6 +637,7 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
                     Colors.orange,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _buildStatItem(
                     'With Location',

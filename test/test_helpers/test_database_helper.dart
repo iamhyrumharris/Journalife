@@ -4,7 +4,6 @@ import 'package:path/path.dart' as path;
 import 'package:journal_new/models/attachment.dart';
 import 'package:journal_new/models/entry.dart';
 import 'package:journal_new/models/journal.dart';
-import 'package:journal_new/models/user.dart';
 
 /// Helper class for managing test databases in isolation
 class TestDatabaseHelper {
@@ -92,23 +91,10 @@ class TestDatabaseHelper {
 
   /// Inserts test data into the database
   static Future<void> insertTestData(Database db, {
-    List<User>? users,
     List<Journal>? journals,
     List<Entry>? entries,
     List<Attachment>? attachments,
   }) async {
-    // Insert users
-    if (users != null) {
-      for (final user in users) {
-        await db.insert('users', {
-          'id': user.id,
-          'name': user.name,
-          'email': user.email,
-          'created_at': user.createdAt.toIso8601String(),
-          'updated_at': user.updatedAt.toIso8601String(),
-        });
-      }
-    }
 
     // Insert journals
     if (journals != null) {
@@ -117,11 +103,8 @@ class TestDatabaseHelper {
           'id': journal.id,
           'name': journal.name,
           'description': journal.description,
-          'owner_id': journal.ownerId,
-          'shared_with_user_ids': journal.sharedWithUserIds.join(','),
-          'is_shared': journal.isShared ? 1 : 0,
-          'created_at': journal.createdAt.toIso8601String(),
-          'updated_at': journal.updatedAt.toIso8601String(),
+          'created_at': journal.createdAt.millisecondsSinceEpoch,
+          'updated_at': journal.updatedAt.millisecondsSinceEpoch,
         });
       }
     }
@@ -283,21 +266,11 @@ class TestDatabaseHelper {
   }) async {
     final db = await createTestDatabase(name: 'migration_test.db');
     
-    // Create test users and journals
-    final user = User(
-      id: 'test-user-1',
-      name: 'Test User',
-      email: 'test@example.com',
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    
+    // Create test journal
     final journal = Journal(
       id: 'test-journal-1',
       name: 'Test Journal',
       description: 'Test journal for migration',
-      ownerId: user.id,
-      sharedWithUserIds: [],
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

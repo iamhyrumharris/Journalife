@@ -14,7 +14,6 @@ import '../../widgets/common/error_state_widget.dart';
 import '../entry/entry_edit_screen.dart';
 import '../entry/day_entries_screen.dart';
 import '../settings/settings_screen.dart';
-import '../profile/profile_screen.dart';
 import '../../widgets/search_overlay.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -55,7 +54,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           child: JournalSelector(isAppBarTitle: true),
         ),
         leadingWidth: 200,
-        title: const Text('Calendar'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -76,18 +74,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               );
             },
             tooltip: 'Settings',
-          ),
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfileScreen(),
-                ),
-              );
-            },
-            tooltip: 'Profile',
           ),
         ],
       ),

@@ -134,8 +134,8 @@ class SyncConfig {
     );
   }
 
-  /// Gets the base WebDAV path for this user's data
-  String get basePath => '/journal_app/${username}_data';
+  /// Gets the base WebDAV path for journal data
+  String get basePath => '/journal_app';
 
   /// Gets the WebDAV path for a specific journal with date-based organization
   String getJournalPath(String journalId) => '$basePath/journals/$journalId';
