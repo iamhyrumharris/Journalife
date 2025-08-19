@@ -10,7 +10,6 @@ class CalendarDayCell extends StatelessWidget {
   final bool isToday;
   final List<Entry> entries;
   final VoidCallback? onTap;
-
   const CalendarDayCell({
     super.key,
     required this.dayNumber,
@@ -44,7 +43,6 @@ class _CalendarDayCellContent extends StatelessWidget {
   final bool isToday;
   final List<Entry> entries;
   final VoidCallback? onTap;
-
   const _CalendarDayCellContent({
     required this.dayNumber,
     required this.isCurrentMonth,
@@ -63,9 +61,14 @@ class _CalendarDayCellContent extends StatelessWidget {
     final totalPhotos = _getTotalPhotoCount();
     final hasNonPhotoEntries = _computeHasNonPhotoEntries();
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    return Semantics(
+      label: isCurrentMonth 
+          ? 'Select day $dayNumber'
+          : 'Day $dayNumber from adjacent month',
+      button: isCurrentMonth,
+      child: GestureDetector(
+        onTap: isCurrentMonth ? onTap : null,
+        child: Container(
         decoration: BoxDecoration(
           border: isSelected 
               ? Border.all(color: Theme.of(context).primaryColor, width: 2)
@@ -80,6 +83,7 @@ class _CalendarDayCellContent extends StatelessWidget {
           child: hasPhoto 
               ? _buildPhotoCell(context, representativePhoto, totalPhotos, hasNonPhotoEntries)
               : _buildEmptyCell(context, hasNonPhotoEntries),
+        ),
         ),
       ),
     );
@@ -171,24 +175,26 @@ class _CalendarDayCellContent extends StatelessWidget {
   }
 
   Widget _buildCenteredDayNumber(BuildContext context) {
-    final hasPhotos = _getRepresentativePhoto() != null;
-    
-    // Don't show day numbers for non-current-month days
+    // Don't show day numbers for non-current month days
     if (!isCurrentMonth) {
       return const SizedBox.shrink();
     }
+    
+    final hasPhotos = _getRepresentativePhoto() != null;
+    
+    final textColor = hasPhotos 
+        ? Colors.white
+        : (isSelected
+            ? Colors.black
+            : (isToday 
+                ? Theme.of(context).primaryColor
+                : Theme.of(context).textTheme.bodyMedium?.color));
     
     return Center(
       child: Text(
         '$dayNumber',
         style: TextStyle(
-          color: hasPhotos 
-              ? Colors.white
-              : (isSelected
-                  ? Colors.black
-                  : (isToday 
-                      ? Theme.of(context).primaryColor
-                      : Theme.of(context).textTheme.bodyMedium?.color)),
+          color: textColor,
           fontSize: 14,
           fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w600,
         ),

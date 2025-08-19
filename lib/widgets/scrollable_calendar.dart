@@ -10,7 +10,6 @@ class ScrollableCalendar extends StatefulWidget {
   final Function(DateTime) onDaySelected;
   final Function(int) onYearChanged;
   final Function(DateTime) onMonthChanged;
-
   const ScrollableCalendar({
     super.key,
     required this.selectedYear,
@@ -34,7 +33,6 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   static const double _horizontalPadding = 4.0; // Must match container padding
 
   // These are computed at layout-time based on available width
-  double _monthItemExtent = 0;
   double _rowHeight = 0; // Square cell size based on width
   double? _viewportHeight; // For centering month within viewport
   bool _didInitialCenter = false; // Prevent auto-centering on resize
@@ -44,7 +42,9 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   late final DateTime _baseDate;
   final int _centerOffset = 600; // Center point for infinite scrolling
   
-  // (Fixed-height mode active; helper not used)
+  // Height cache for variable-height months
+  final Map<int, double> _monthHeights = {};
+  final Map<int, double> _cumulativeHeights = {};
 
   @override
   void initState() {
@@ -108,14 +108,74 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     return DateTime(year, month);
   }
 
+  // Calculate how many weeks (rows) a month needs
+  int _getMonthWeekCount(DateTime month) {
+    final firstDay = DateTime(month.year, month.month, 1);
+    final lastDay = DateTime(month.year, month.month + 1, 0);
+    
+    // 0 = Sunday, ... 6 = Saturday
+    final firstDayOfWeek = firstDay.weekday == 7 ? 0 : firstDay.weekday;
+    final daysInMonth = lastDay.day;
+    
+    // Calculate total cells needed for this month
+    final totalCells = firstDayOfWeek + daysInMonth;
+    
+    // Return number of weeks (rows) needed
+    return (totalCells / 7).ceil();
+  }
+
+  // Get cached height for a month
+  double _getMonthHeight(int monthIndex) {
+    if (_rowHeight <= 0) return 200; // Default estimate
+    
+    return _monthHeights.putIfAbsent(monthIndex, () {
+      final month = _getMonthForIndex(monthIndex);
+      final weekCount = _getMonthWeekCount(month);
+      final gridHeight = (_rowHeight * weekCount) + (_gridMainAxisSpacing * (weekCount - 1));
+      return _bannerHeight + gridHeight;
+    });
+  }
+
+  // Find which month is visible at given scroll offset
+  int _getMonthIndexFromOffset(double offset) {
+    // Build cumulative heights if needed
+    if (_cumulativeHeights.isEmpty && _rowHeight > 0) {
+      double cumulative = 0;
+      for (int i = 0; i < _centerOffset * 2; i++) {
+        _cumulativeHeights[i] = cumulative;
+        cumulative += _getMonthHeight(i);
+      }
+    }
+    
+    // Use viewport center for more accurate month detection
+    final centerOffset = offset + (_viewportHeight ?? 0) / 2;
+    
+    // Binary search through cumulative heights using center offset
+    int left = 0, right = _cumulativeHeights.length - 1;
+    while (left <= right) {
+      int mid = (left + right) ~/ 2;
+      final height = _cumulativeHeights[mid]!;
+      final nextHeight = mid + 1 < _cumulativeHeights.length ? _cumulativeHeights[mid + 1]! : double.infinity;
+      
+      if (height <= centerOffset && centerOffset < nextHeight) {
+        return mid;
+      } else if (height > centerOffset) {
+        right = mid - 1;
+      } else {
+        left = mid + 1;
+      }
+    }
+    return left.clamp(0, _cumulativeHeights.length - 1);
+  }
+
   void _onScroll() {
     // Don't update current month during resize adjustments
-    if (_isAdjustingForResize || !_scrollController.hasClients || _monthItemExtent <= 0) {
+    if (_isAdjustingForResize || !_scrollController.hasClients) {
       return;
     }
     
     final scrollOffset = _scrollController.offset;
-    final monthIndex = (scrollOffset / _monthItemExtent).round();
+    final monthIndex = _getMonthIndexFromOffset(scrollOffset);
     final month = _getMonthForIndex(monthIndex);
     
     if (month.month != _currentMonth.month || month.year != _currentMonth.year) {
@@ -134,13 +194,26 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
   }
 
   void _centerOnMonth(DateTime month) {
-    if (!_scrollController.hasClients || _monthItemExtent <= 0) return;
+    if (!_scrollController.hasClients) return;
+    
+    // Build cumulative heights if needed
+    if (_cumulativeHeights.isEmpty && _rowHeight > 0) {
+      double cumulative = 0;
+      for (int i = 0; i < _centerOffset * 2; i++) {
+        _cumulativeHeights[i] = cumulative;
+        cumulative += _getMonthHeight(i);
+      }
+    }
+    
     final index = _getMonthIndex(month);
-    double offset = index * _monthItemExtent;
+    double offset = _cumulativeHeights[index] ?? 0;
+    
     if (_viewportHeight != null) {
-      final extra = _viewportHeight! - _monthItemExtent;
+      final monthHeight = _getMonthHeight(index);
+      final extra = _viewportHeight! - monthHeight;
       if (extra > 0) offset -= extra / 2;
     }
+    
     final pos = _scrollController.position;
     _scrollController.jumpTo(offset.clamp(pos.minScrollExtent, pos.maxScrollExtent));
 
@@ -164,33 +237,28 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               _viewportHeight = constraints.maxHeight;
-              // Compute fixed month extent (banner + 6 rows) based on width for stable scrolling
+              // Compute row height based on width for square cells
               final availableWidth = constraints.maxWidth - (_horizontalPadding * 2);
               final cellWidth = (availableWidth - _gridMainAxisSpacing * (7 - 1)) / 7.0;
-              _rowHeight = cellWidth; // childAspectRatio is 1.0
-              final fullGridHeight = (_rowHeight * 6) + (_gridMainAxisSpacing * 5);
-              final newMonthItemExtent = _bannerHeight + fullGridHeight;
+              final newRowHeight = cellWidth; // childAspectRatio is 1.0
 
-              // Handle resize: preserve current month position when extent changes
-              if (_didInitialCenter && _monthItemExtent > 0 && newMonthItemExtent != _monthItemExtent && _scrollController.hasClients) {
-                final currentIndex = _getMonthIndex(_currentMonth);
+              // Handle resize: clear caches and recalculate if row height changed
+              if (_didInitialCenter && _rowHeight > 0 && newRowHeight != _rowHeight && _scrollController.hasClients) {
                 _isAdjustingForResize = true;
-                _monthItemExtent = newMonthItemExtent;
+                _rowHeight = newRowHeight;
+                
+                // Clear height caches as they're now invalid
+                _monthHeights.clear();
+                _cumulativeHeights.clear();
                 
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted && _scrollController.hasClients) {
-                    double offset = currentIndex * _monthItemExtent;
-                    if (_viewportHeight != null) {
-                      final extra = _viewportHeight! - _monthItemExtent;
-                      if (extra > 0) offset -= extra / 2;
-                    }
-                    final pos = _scrollController.position;
-                    _scrollController.jumpTo(offset.clamp(pos.minScrollExtent, pos.maxScrollExtent));
+                    _centerOnMonth(_currentMonth);
                     _isAdjustingForResize = false;
                   }
                 });
               } else {
-                _monthItemExtent = newMonthItemExtent;
+                _rowHeight = newRowHeight;
               }
 
               // Center exactly once after first layout with valid row height
@@ -206,16 +274,19 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
               return ListView.builder(
                 controller: _scrollController,
                 scrollDirection: Axis.vertical,
-                itemExtent: _monthItemExtent,
+                // Removed itemExtent for variable heights
                 itemCount: _centerOffset * 2, // Provide reasonable range (2020-2070)
                 itemBuilder: (context, index) {
                   final month = _getMonthForIndex(index);
+                  final weekCount = _getMonthWeekCount(month);
+                  final gridHeight = (_rowHeight * weekCount) + (_gridMainAxisSpacing * (weekCount - 1));
+                  
                   return Column(
                     children: [
                       _buildMonthBanner(context, month),
                       SizedBox(
-                        height: fullGridHeight,
-                        child: _buildMonthGrid(context, month),
+                        height: gridHeight,
+                        child: _buildMonthGrid(context, month, weekCount),
                       ),
                     ],
                   );
@@ -270,7 +341,7 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
     );
   }
 
-  Widget _buildMonthGrid(BuildContext context, DateTime month) {
+  Widget _buildMonthGrid(BuildContext context, DateTime month, int weekCount) {
     final firstDayOfMonth = DateTime(month.year, month.month, 1);
     final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
     final daysInMonth = lastDayOfMonth.day;
@@ -295,8 +366,8 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
       cells.add(_buildDayCell(context, date, true, month));
     }
 
-    // Trailing days from next month to complete 6 weeks (42 cells)
-    const targetCells = 42; // 6 weeks * 7
+    // Trailing days from next month to complete the grid
+    final targetCells = weekCount * 7; // Only fill needed weeks
     final nextMonth = DateTime(month.year, month.month + 1, 1);
     int trailingDay = 1;
     while (cells.length < targetCells) {
@@ -338,14 +409,20 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
                    date.month == cachedToday.month && 
                    date.day == cachedToday.day;
     
+    // Strengthen isCurrentMonth validation to prevent cross-month highlighting
+    final actuallyIsCurrentMonth = isCurrentMonth && 
+                                  date.month == displayMonth.month && 
+                                  date.year == displayMonth.year;
+    
     final selectedDay = widget.selectedDay;
-    final isSelected = selectedDay != null && 
+    final isSelected = actuallyIsCurrentMonth &&
+                      selectedDay != null && 
                       date.year == selectedDay.year && 
                       date.month == selectedDay.month && 
                       date.day == selectedDay.day;
     
     // Filter entries more efficiently
-    final dayEntries = isCurrentMonth 
+    final dayEntries = actuallyIsCurrentMonth 
         ? widget.entries.where((entry) {
             final entryDate = entry.createdAt;
             return entryDate.year == date.year && 
@@ -355,8 +432,9 @@ class ScrollableCalendarState extends State<ScrollableCalendar> {
         : const <Entry>[];
     
     return CalendarDayCell(
+      key: ValueKey('${date.year}-${date.month}-${date.day}'),
       dayNumber: date.day,
-      isCurrentMonth: isCurrentMonth,
+      isCurrentMonth: actuallyIsCurrentMonth,
       isSelected: isSelected,
       isToday: isToday,
       entries: dayEntries,

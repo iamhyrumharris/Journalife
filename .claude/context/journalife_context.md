@@ -73,13 +73,58 @@ lib/
 - **Code Quality**: `flutter analyze` before all commits
 
 ## Current Challenges
-- **Scrolling in calendar view**: When scrolling in calendar view it seems like it hiccups for a super brief second after it passes a month.
-- **Calendar needs to be variable**: Calendar needs to be variable between 4-6 weeks since each month is different.j
+*[List current technical challenges or issues]*
 
 ## Next Features to Implement
 *[List upcoming features in priority order]*
 
 ## Recent Completed Work
+
+### ✅ Today Button Calendar Navigation Fix (August 19, 2025)
+**Fixed "Today" button disappearing after current month navigation bug:**
+- **Root Cause**: Month detection algorithm using raw scroll offset instead of viewport center
+- **Solution**: Modified `_getMonthIndexFromOffset()` to use `centerOffset = offset + (_viewportHeight ?? 0) / 2`
+- **Files Changed**: `lib/widgets/scrollable_calendar.dart` (lines 150, 155-166)
+- **Behavior Fixed**: Today button now correctly appears when viewing any month except current month
+- **Testing**: Validated with debug logging showing proper month detection alignment
+- **Impact**: Resolved core UI navigation bug affecting user experience
+
+**Implementation Details:**
+- Modified viewport center calculation for accurate month detection
+- Maintained existing scroll performance and variable-height month support
+- No regression in Today button navigation functionality
+- Quick targeted fix addressing specific calculation error
+
+### ✅ Calendar UI Refinement - Removed Greyed Day Interaction (August 19, 2025)
+**Removed numbers and touch functionality from greyed out calendar days:**
+- **Visual Cleanup**: Greyed out days (previous/future months) now appear as blank cells without day numbers
+- **Interaction Removal**: Non-current month days no longer respond to touch/tap events
+- **Navigation Simplification**: Month navigation limited to year picker, keyboard shortcuts, and swipe gestures
+- **UX Improvement**: Eliminates confusion and accidental navigation to adjacent months via day taps
+- **Accessibility Update**: Improved semantic labels to reflect non-interactive nature of greyed days
+- **Code Simplification**: Removed `onNavigateToMonth` callback system and related navigation logic
+
+**Implementation Details:**
+- Files modified: `lib/widgets/calendar_day_cell.dart`, `lib/widgets/scrollable_calendar.dart`, `lib/screens/calendar/calendar_screen.dart`
+- Lines changed: ~40 lines removed/modified across 3 files
+- Methods removed: `_handleMonthNavigation()` from calendar screen
+- Architecture: Simplified conditional rendering and interaction handling
+
+### ✅ Variable-Height Calendar Implementation (August 19, 2025)
+**Fixed calendar to show only necessary weeks (4-6) per month:**
+- **Week Count Algorithm**: Implemented dynamic calculation to determine actual weeks needed per month
+- **Visual Fix**: Eliminated empty grey rows by showing only required weeks (4-6 instead of always 6)
+- **Scroll Performance**: Removed fixed itemExtent, implemented variable-height ListView with height caching
+- **Position Management**: Added cumulative height tracking and binary search for scroll position
+- **UI Improvements**: Each month now uses exactly the space it needs, creating cleaner appearance
+- **Performance**: Smooth scrolling maintained through efficient height caching and position calculations
+- **Edge Cases**: Properly handles February (4-5 weeks), 30-day months (5-6 weeks), 31-day months (5-6 weeks)
+
+**Implementation Details:**
+- Files modified: `lib/widgets/scrollable_calendar.dart`
+- Lines changed: ~150 lines modified/added
+- New methods: `_getMonthWeekCount()`, `_getMonthHeight()`, `_getMonthIndexFromOffset()`
+- Architecture: Progressive enhancement approach with height caching for performance
 
 ### ✅ Calendar Single Thumbnail Display (August 19, 2025)
 **Simplified calendar day cell to show single thumbnail:**

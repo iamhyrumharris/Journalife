@@ -46,6 +46,7 @@ class EntryNotifier extends StateNotifier<AsyncValue<List<Entry>>> {
       final now = DateTime.now();
       final entryCreatedAt = createdAt ?? now;
       
+      
       final entry = Entry(
         id: id ?? _uuid.v4(),
         journalId: _journalId,

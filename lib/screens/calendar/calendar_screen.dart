@@ -203,6 +203,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
+
   bool _shouldShowJumpButton() {
     final now = DateTime.now();
     final currentMonth = DateTime(now.year, now.month);

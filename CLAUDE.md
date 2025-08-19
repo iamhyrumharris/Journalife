@@ -69,6 +69,7 @@ A Flutter journal application with single-user focus, WebDAV sync, and comprehen
 ### Feature Preferences
 - **No Mood Tracking**: The user has explicitly requested removal of mood/rating functionality from the journal app. Do not implement or suggest mood tracking, rating systems, or emotional analysis features unless explicitly requested.
 - **Single-User Focus**: ✅ COMPLETED (Aug 18, 2025) - Successfully converted from multi-user to single-user architecture. All sharing, collaboration, and user management features have been removed.
+- **Calendar UI Simplification**: ✅ COMPLETED (Aug 19, 2025) - User prefers clean calendar interface without interactive elements on greyed-out days. No numbers or touch functionality on previous/future month days.
 
 ## Key Commands
 

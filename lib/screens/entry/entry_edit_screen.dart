@@ -60,6 +60,7 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> with WidgetsB
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+
     // Initialize consistent entry ID for this editing session
     _entryId = widget.entry?.id ?? _uuid.v4();
 
@@ -138,10 +139,10 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> with WidgetsB
       );
     }
 
-    // Get current date for display
-    final now = DateTime.now();
+    // Get date for display - use initialDate for new entries, entry date for existing entries
+    final displayDate = _isEditing ? widget.entry!.createdAt : (widget.initialDate ?? DateTime.now());
     final dateFormatter = DateFormat('E, MMM d, yyyy h:mm a');
-    final formattedDate = dateFormatter.format(now);
+    final formattedDate = dateFormatter.format(displayDate);
 
     return PopScope(
       onPopInvokedWithResult: (didPop, result) {
