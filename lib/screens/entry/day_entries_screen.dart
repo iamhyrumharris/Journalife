@@ -75,6 +75,7 @@ class DayEntriesScreen extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'day_entries_create_fab',
         onPressed: () => _navigateToCreateEntry(context),
         tooltip: 'Create New Entry',
         child: const Icon(Icons.add),

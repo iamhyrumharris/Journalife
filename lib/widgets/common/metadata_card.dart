@@ -5,7 +5,6 @@ class MetadataCard extends StatelessWidget {
   final String journalName;
   final DateTime? createdAt;
   final String? locationName;
-  final String? weather;
   final bool showAllMetadata;
 
   const MetadataCard({
@@ -13,7 +12,6 @@ class MetadataCard extends StatelessWidget {
     required this.journalName,
     this.createdAt,
     this.locationName,
-    this.weather,
     this.showAllMetadata = true,
   });
 
@@ -91,16 +89,6 @@ class MetadataCard extends StatelessWidget {
               ),
             ],
             
-            if (weather != null) ...[
-              const SizedBox(height: 12),
-              _buildMetadataRow(
-                icon: Icons.wb_sunny,
-                label: 'Weather',
-                value: weather!,
-                theme: theme,
-                colorScheme: colorScheme,
-              ),
-            ],
           ],
         ],
       ),
@@ -136,6 +124,8 @@ class MetadataCard extends StatelessWidget {
               color: colorScheme.onSurface,
               fontWeight: FontWeight.w500,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],

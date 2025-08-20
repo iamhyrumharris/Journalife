@@ -61,6 +61,7 @@ class JournalListScreen extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'journal_list_create_fab',
         onPressed: () => _navigateToCreateJournal(context),
         tooltip: 'Create Journal',
         child: const Icon(Icons.add),

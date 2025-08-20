@@ -102,6 +102,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         },
       ),
       floatingActionButton: _shouldShowJumpButton() ? FloatingActionButton.small(
+        heroTag: 'calendar_jump_today_fab',
         onPressed: _jumpToToday,
         tooltip: 'Jump to today',
         backgroundColor: Theme.of(context).primaryColor,

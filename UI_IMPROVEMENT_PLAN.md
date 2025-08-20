@@ -73,7 +73,6 @@
 - Rich text editor with formatting
 - Improved media attachment UI
 - Location picker with map preview
-- Mood/weather selectors
 - Template system for common entries
 
 ### 3.4 Reflect Screen

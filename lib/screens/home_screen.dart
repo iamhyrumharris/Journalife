@@ -107,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'home_create_entry_fab',
         onPressed: () {
           ErrorService.addBreadcrumb('User tapped create entry button');
           Navigator.pushNamed(context, '/entry/create');

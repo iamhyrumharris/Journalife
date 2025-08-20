@@ -4,18 +4,14 @@ class LocationCard extends StatelessWidget {
   final String locationName;
   final double? latitude;
   final double? longitude;
-  final String? weather;
   final VoidCallback? onTap;
-  final bool showWeather;
 
   const LocationCard({
     super.key,
     required this.locationName,
     this.latitude,
     this.longitude,
-    this.weather,
     this.onTap,
-    this.showWeather = true,
   });
 
   @override
@@ -60,6 +56,8 @@ class LocationCard extends StatelessWidget {
                       color: colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   if (latitude != null && longitude != null) ...[
                     const SizedBox(height: 4),
@@ -74,34 +72,6 @@ class LocationCard extends StatelessWidget {
                 ],
               ),
             ),
-            if (showWeather && weather != null) ...[
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.wb_sunny,
-                      size: 16,
-                      color: colorScheme.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      weather!,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),

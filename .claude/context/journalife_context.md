@@ -51,6 +51,7 @@
 
 ## Key Constraints & Preferences
 - **No Mood Tracking**: User has explicitly requested no mood/rating functionality
+- **No Weather Feature (for now)**: User has decided to postpone weather integration (Aug 20, 2025)
 - **Single-User Focus**: Currently building for single-user experience (no sharing/collaboration)
 - **Offline-First**: Must work without internet connection
 - **Cross-Platform**: Must maintain feature parity across all platforms
@@ -79,7 +80,47 @@ lib/
 ## Next Features to Implement
 *[List upcoming features in priority order]*
 
+## Backlog Features (Not Currently Prioritized)
+- **Weather Integration**: Postponed (Aug 20, 2025)
+  - Research completed: Open-Meteo API (no key required) or WeatherKit (iOS only, requires dev account)
+  - Would add weather fields to Entry model (weatherCondition, temperature, weatherDescription)
+  - Could auto-fetch based on location or allow manual entry
+
 ## Recent Completed Work
+
+### ✅ Location Text Overflow Fix (August 20, 2025)
+**Fixed location text overflow on small screens:**
+- **Issue**: Location names causing RenderFlex overflow (121 pixels) on entry edit screen and other location displays
+- **Root Cause**: Location text in Row widgets not properly constrained for long location names
+- **Solution**: Added proper text overflow handling with ellipsis across all location displays
+
+**Code Changes:**
+- **LocationCard** (`lib/widgets/common/location_card.dart:59-60`): Added `maxLines: 1` and `overflow: TextOverflow.ellipsis`
+- **MetadataCard** (`lib/widgets/common/metadata_card.dart:127-128`): Added `maxLines: 1` and `overflow: TextOverflow.ellipsis` 
+- **Entry Edit Screen** (`lib/screens/entry/entry_edit_screen.dart:240-272`): Wrapped journal name in `Flexible` and location in `Expanded` with ellipsis overflow
+
+**Technical Details:**
+- **Files modified**: 3 files (location_card.dart, metadata_card.dart, entry_edit_screen.dart)
+- **Lines changed**: ~15 lines total
+- **Strategy**: Simple ellipsis truncation with proper widget constraints
+- **Priority**: Location text gets expansion priority over journal name
+- **Result**: No more RenderFlex overflow errors, clean text display on all screen sizes
+- **Validation**: Flutter analyze passes, no new warnings introduced
+
+### ✅ Calendar Day Selection Fix (August 20, 2025)
+**Fixed calendar day selection to navigate to correct date:**
+- **Issue**: Clicking any day on calendar always opened current day's edit page instead of selected day
+- **Root Cause**: EntryEditScreen was displaying `DateTime.now()` instead of selected date
+- **Solution**: Modified date display logic to use `widget.entry?.createdAt ?? widget.initialDate ?? DateTime.now()`
+- **Code Changes**: Updated `entry_edit_screen.dart:142` to properly handle date precedence
+- **Result**: Calendar day selection now correctly navigates to and displays the selected date
+- **Impact**: Improved user experience and fixed core calendar functionality
+
+**Technical Details:**
+- Files modified: `lib/screens/entry/entry_edit_screen.dart`
+- Lines changed: 4 lines (date calculation logic)
+- Date precedence: existing entry date → calendar selected date → current date (fallback)
+- Validated: Flutter analyze passes, iOS build successful
 
 ### ✅ Calendar Single Thumbnail Display (August 19, 2025)
 **Simplified calendar day cell to show single thumbnail:**

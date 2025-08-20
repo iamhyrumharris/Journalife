@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../models/entry.dart';
 import '../../models/journal.dart';
 import '../../providers/journal_provider.dart';
@@ -19,14 +20,20 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  GoogleMapController? _mapController;
-  final Set<Marker> _markers = {};
+  final MapController _mapController = MapController();
+  final List<Marker> _markers = [];
+  bool _hasInitiallyFitToMarkers = false;
+  List<Entry>? _lastProcessedEntries;
   
   // Default to a generic location (San Francisco)
-  static const CameraPosition _initialCameraPosition = CameraPosition(
-    target: LatLng(37.7749, -122.4194),
-    zoom: 10,
-  );
+  static const LatLng _initialCenter = LatLng(37.7749, -122.4194);
+  static const double _initialZoom = 10.0;
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -156,69 +163,55 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       data: (entries) {
         final entriesWithLocation = entries.where((e) => e.hasLocation).toList();
         
-        if (entriesWithLocation.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.location_off, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  'No entries with location in ${journal.name}',
-                  style: const TextStyle(fontSize: 18, color: Colors.grey),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Add location to your entries to see them on the map',
-                  style: TextStyle(color: Colors.grey),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/entry/create');
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Entry'),
-                ),
-              ],
-            ),
-          );
+        // Only update markers when entries actually change
+        if (_lastProcessedEntries == null || 
+            !_entriesEqual(_lastProcessedEntries!, entriesWithLocation)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _updateMarkers(entriesWithLocation);
+            _lastProcessedEntries = List.from(entriesWithLocation);
+            
+            // Only fit to markers on initial load, not on every rebuild
+            if (entriesWithLocation.isNotEmpty && !_hasInitiallyFitToMarkers) {
+              _fitMapToMarkers(entriesWithLocation);
+              _hasInitiallyFitToMarkers = true;
+            }
+          });
         }
 
-        // Update markers when entries change
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _updateMarkers(entriesWithLocation);
-        });
-
-        return GoogleMap(
-          initialCameraPosition: _initialCameraPosition,
-          onMapCreated: (GoogleMapController controller) {
-            _mapController = controller;
-            _fitMapToMarkers(entriesWithLocation);
-          },
-          markers: _markers,
-          onTap: (LatLng position) {
-            _showCreateEntryDialog(position);
-          },
+        return FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: _initialCenter,
+            initialZoom: _initialZoom,
+            onTap: (tapPosition, point) => _showCreateEntryDialog(point),
+            // Remove problematic onMapReady workaround that could interfere with zooming
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.journalapp.journal_new',
+            ),
+            if (_markers.isNotEmpty)
+              MarkerLayer(
+                markers: _markers,
+              ),
+          ],
         );
       },
     );
   }
 
   void _updateMarkers(List<Entry> entries) {
-    final newMarkers = <Marker>{};
+    final newMarkers = <Marker>[];
 
     for (int i = 0; i < entries.length; i++) {
       final entry = entries[i];
       if (entry.hasLocation) {
         final marker = Marker(
-          markerId: MarkerId(entry.id),
-          position: LatLng(entry.latitude!, entry.longitude!),
-          infoWindow: InfoWindow(
-            title: entry.title.isNotEmpty ? entry.title : 'Entry',
-            snippet: entry.locationName ?? 'Tap to view details',
+          point: LatLng(entry.latitude!, entry.longitude!),
+          width: 40,
+          height: 40,
+          child: GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
@@ -227,9 +220,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ),
               );
             },
-          ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            _getMarkerHue(i),
+            child: Container(
+              decoration: BoxDecoration(
+                color: _getMarkerColor(i),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.location_on,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
           ),
         );
         newMarkers.add(marker);
@@ -244,22 +253,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  double _getMarkerHue(int index) {
+  Color _getMarkerColor(int index) {
     // Cycle through different colors for markers
-    final hues = [
-      BitmapDescriptor.hueRed,
-      BitmapDescriptor.hueBlue,
-      BitmapDescriptor.hueGreen,
-      BitmapDescriptor.hueYellow,
-      BitmapDescriptor.hueOrange,
-      BitmapDescriptor.hueMagenta,
-      BitmapDescriptor.hueCyan,
+    final colors = [
+      Colors.red,
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.indigo,
     ];
-    return hues[index % hues.length];
+    return colors[index % colors.length];
   }
 
   void _fitMapToMarkers(List<Entry> entries) {
-    if (entries.isEmpty || _mapController == null) return;
+    if (entries.isEmpty) return;
 
     double minLat = entries.first.latitude!;
     double maxLat = entries.first.latitude!;
@@ -282,15 +291,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     minLng -= padding;
     maxLng += padding;
 
-    _mapController!.animateCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(minLat, minLng),
-          northeast: LatLng(maxLat, maxLng),
-        ),
-        100.0, // padding
-      ),
+    // Calculate bounds and fit map
+    final bounds = LatLngBounds(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
     );
+    
+    _mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)));
   }
 
   void _showCreateEntryDialog(LatLng position) {
@@ -338,37 +345,55 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         final locationName = locationData['locationName'] as String;
         
         // Move camera to current location
-        if (_mapController != null) {
-          await _mapController!.animateCamera(
-            CameraUpdate.newLatLngZoom(
-              LatLng(latitude, longitude),
-              15.0, // Zoom level for current location
+        _mapController.move(
+          LatLng(latitude, longitude),
+          15.0, // Zoom level for current location
+        );
+        
+        // Add a marker for current location
+        setState(() {
+          // Remove any existing current location marker
+          _markers.removeWhere((marker) => 
+              marker.point == LatLng(latitude, longitude) && 
+              marker.child is Container &&
+              (marker.child as Container).decoration is BoxDecoration &&
+              ((marker.child as Container).decoration as BoxDecoration).color == Colors.blue);
+          
+          _markers.add(
+            Marker(
+              point: LatLng(latitude, longitude),
+              width: 40,
+              height: 40,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.my_location,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
             ),
           );
-          
-          // Add a marker for current location
-          setState(() {
-            _markers.add(
-              Marker(
-                markerId: const MarkerId('current_location'),
-                position: LatLng(latitude, longitude),
-                infoWindow: InfoWindow(
-                  title: 'Current Location',
-                  snippet: locationName,
-                ),
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-              ),
-            );
-          });
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Located at: $locationName'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Located at: $locationName'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } else {
         // Handle error
@@ -401,5 +426,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         content: Text('Create journal functionality will be added'),
       ),
     );
+  }
+
+  bool _entriesEqual(List<Entry> a, List<Entry> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id || 
+          a[i].latitude != b[i].latitude || 
+          a[i].longitude != b[i].longitude) {
+        return false;
+      }
+    }
+    return true;
   }
 }
