@@ -5,10 +5,9 @@ import '../../models/entry.dart';
 import '../../models/journal.dart';
 import '../../providers/journal_provider.dart';
 import '../../providers/entry_provider.dart';
-import '../../providers/calendar_state_provider.dart';
 import '../../widgets/journal_selector.dart';
-import '../../widgets/calendar/performance_calendar_view.dart';
-import '../../widgets/common/date_picker_modal.dart';
+import '../../widgets/file_migration_dialog.dart';
+import '../../widgets/scrollable_calendar.dart';
 import '../../widgets/common/loading_shimmer.dart';
 import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/error_state_widget.dart';
@@ -16,7 +15,6 @@ import '../entry/entry_edit_screen.dart';
 import '../entry/day_entries_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../widgets/search_overlay.dart';
-import '../../utils/date_extensions.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -26,81 +24,22 @@ class CalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  int _selectedYear = DateTime.now().year;
   DateTime? _selectedDay;
-  final GlobalKey<PerformanceCalendarViewState> _calendarKey = GlobalKey<PerformanceCalendarViewState>();
+  DateTime _currentViewedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  final GlobalKey<ScrollableCalendarState> _calendarKey = GlobalKey<ScrollableCalendarState>();
   final FocusNode _focusNode = FocusNode();
-  bool _isJumpingToDate = false;
 
   @override
   void initState() {
     super.initState();
     _selectedDay = DateTime.now();
-    
-    // Initialize selected date in provider
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(selectedDateProvider.notifier).state = _selectedDay;
-    });
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
     super.dispose();
-  }
-
-  void _showDatePicker() {
-    final currentDate = ref.read(selectedDateProvider) ?? DateTime.now();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.5,
-          maxChildSize: 0.9,
-          builder: (BuildContext context, ScrollController scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-              ),
-              child: DatePickerModal(
-                initialDate: currentDate,
-                onDateSelected: (selectedDate) {
-                  _jumpToDate(selectedDate);
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _jumpToDate(DateTime date) {
-    setState(() {
-      _isJumpingToDate = true;
-    });
-    
-    // Update the selected date in the provider
-    ref.read(selectedDateProvider.notifier).state = date;
-    _selectedDay = date;
-    
-    // Jump to the selected date in the calendar
-    _calendarKey.currentState?.jumpToDate(date);
-    
-    // Reset the jumping flag after a short delay
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() {
-          _isJumpingToDate = false;
-        });
-      }
-    });
   }
 
   @override
@@ -117,11 +56,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         leadingWidth: 200,
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_month),
-            onPressed: _showDatePicker,
-            tooltip: 'Jump to date',
-          ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
@@ -164,9 +98,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             });
           }
 
-          return _buildPerformanceCalendar(effectiveJournal);
+          return _buildScrollableCalendar(effectiveJournal);
         },
       ),
+      floatingActionButton: _shouldShowJumpButton() ? FloatingActionButton.small(
+        onPressed: _jumpToToday,
+        tooltip: 'Jump to today',
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+        child: const Text(
+          'Today',
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ) : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -176,7 +121,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Widget _buildPerformanceCalendar(Journal journal) {
+  Widget _buildScrollableCalendar(Journal journal) {
     final entriesAsync = ref.watch(entryProvider(journal.id));
 
     return entriesAsync.when(
@@ -193,21 +138,32 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             _handleKeyEvent(event, entries, journal.id);
           }
         },
-        child: Consumer(
-          builder: (context, ref, child) {
-            // Watch for calendar data refresh
-            ref.watch(calendarDataRefreshProvider);
-            
-            return PerformanceCalendarView(
-              key: _calendarKey,
-              onDayTapped: (date) {
-                // Don't handle day selection if we're currently jumping to a date
-                if (_isJumpingToDate) return;
-                
-                _handleDaySelection(date, entries, journal.id);
-              },
-            );
-          }
+        child: GestureDetector(
+          onPanUpdate: (details) {
+            // Add swipe gesture support for month navigation
+            if (details.delta.dx > 10) {
+              _navigateToPreviousMonth();
+            } else if (details.delta.dx < -10) {
+              _navigateToNextMonth();
+            }
+          },
+          child: ScrollableCalendar(
+            key: _calendarKey,
+            selectedYear: _selectedYear,
+            selectedDay: _selectedDay,
+            entries: entries,
+            onDaySelected: (selectedDay) => _handleDaySelection(selectedDay, entries, journal.id),
+            onYearChanged: (year) {
+              setState(() {
+                _selectedYear = year;
+              });
+            },
+            onMonthChanged: (month) {
+              setState(() {
+                _currentViewedMonth = month;
+              });
+            },
+          ),
         ),
       ),
     );
@@ -218,12 +174,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       _selectedDay = selectedDay;
     });
 
-    // Update selected date in provider
-    ref.read(selectedDateProvider.notifier).state = selectedDay;
-
     // Get entries for the selected day
     final dayEntries = entries.where((entry) {
-      return entry.createdAt.isSameDay(selectedDay);
+      return _isSameDay(entry.createdAt, selectedDay);
     }).toList();
 
     if (dayEntries.isEmpty) {
@@ -250,6 +203,29 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
+  bool _shouldShowJumpButton() {
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    final viewedMonth = DateTime(_currentViewedMonth.year, _currentViewedMonth.month);
+    
+    // Hide button if we're already viewing the current month
+    return !_isSameMonth(currentMonth, viewedMonth);
+  }
+
+  bool _isSameMonth(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month;
+  }
+
+  void _jumpToToday() {
+    final today = DateTime.now();
+    setState(() {
+      _selectedDay = today;
+      _selectedYear = today.year;
+    });
+    
+    // Scroll calendar to today
+    _calendarKey.currentState?.scrollToDate(today);
+  }
 
   void _handleKeyEvent(KeyDownEvent event, List<Entry> entries, String journalId) {
     if (_selectedDay == null) return;
@@ -274,7 +250,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         _handleDaySelection(_selectedDay!, entries, journalId);
         return;
       case LogicalKeyboardKey.keyT:
-        _jumpToDate(DateTime.now());
+        _jumpToToday();
         return;
       default:
         return;
@@ -282,10 +258,29 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     
     setState(() {
       _selectedDay = newSelectedDay;
+      if (newSelectedDay.year != _selectedYear) {
+        _selectedYear = newSelectedDay.year;
+      }
     });
     
-    // Update selected date and jump to new date
-    _jumpToDate(newSelectedDay);
+    // Scroll to the new date if needed
+    _calendarKey.currentState?.scrollToDate(newSelectedDay);
+  }
+
+  void _navigateToPreviousMonth() {
+    final previousMonth = DateTime(_currentViewedMonth.year, _currentViewedMonth.month - 1);
+    setState(() {
+      _currentViewedMonth = previousMonth;
+    });
+    _calendarKey.currentState?.scrollToDate(previousMonth);
+  }
+
+  void _navigateToNextMonth() {
+    final nextMonth = DateTime(_currentViewedMonth.year, _currentViewedMonth.month + 1);
+    setState(() {
+      _currentViewedMonth = nextMonth;
+    });
+    _calendarKey.currentState?.scrollToDate(nextMonth);
   }
 
   Widget _buildShimmerLoading() {
@@ -350,5 +345,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ],
       ),
     );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }
