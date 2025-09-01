@@ -586,6 +586,20 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
         ? hourCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key
         : 0;
 
+    // Most active day of week
+    final dayOfWeekCounts = <int, int>{};
+    for (final entry in entries) {
+      final dayOfWeek = entry.createdAt.weekday;
+      dayOfWeekCounts[dayOfWeek] = (dayOfWeekCounts[dayOfWeek] ?? 0) + 1;
+    }
+    
+    final mostActiveDayOfWeek = dayOfWeekCounts.entries.isNotEmpty
+        ? dayOfWeekCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key
+        : 1;
+    
+    final dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final mostActiveDayName = dayNames[mostActiveDayOfWeek];
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -649,11 +663,26 @@ class _ReflectScreenState extends ConsumerState<ReflectScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildStatItem(
-              'Most Productive Hour',
-              '${mostProductiveHour.toString().padLeft(2, '0')}:00 - ${(mostProductiveHour + 1).toString().padLeft(2, '0')}:00',
-              Icons.schedule,
-              Colors.purple,
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    'Most Productive Hour',
+                    '${mostProductiveHour.toString().padLeft(2, '0')}:00 - ${(mostProductiveHour + 1).toString().padLeft(2, '0')}:00',
+                    Icons.schedule,
+                    Colors.purple,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildStatItem(
+                    'Most Active Day',
+                    mostActiveDayName,
+                    Icons.calendar_view_day,
+                    Colors.teal,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             ExpansionTile(

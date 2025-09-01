@@ -8,6 +8,7 @@ import '../../providers/journal_provider.dart';
 import '../../providers/entry_provider.dart';
 import '../../widgets/journal_selector.dart';
 import '../../widgets/attachment_thumbnail.dart';
+import '../../widgets/timeline_photo_collage.dart';
 import '../../widgets/common/loading_shimmer.dart';
 import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/error_state_widget.dart';
@@ -188,9 +189,24 @@ class TimelineScreen extends ConsumerWidget {
   }
 
   Widget _buildTimelineEntry(BuildContext context, Entry entry) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return SizedBox(
+      width: double.infinity,
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        elevation: 4,
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+            width: 1,
+          ),
+        ),
+        child: InkWell(
+        borderRadius: BorderRadius.circular(20),
         onTap: () {
           Navigator.push(
             context,
@@ -199,124 +215,62 @@ class TimelineScreen extends ConsumerWidget {
             ),
           );
         },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with time and metadata
-              Row(
-                children: [
-                  Text(
-                    DateFormat('HH:mm').format(entry.createdAt),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (entry.hasAttachments) ...[
-                    Icon(Icons.attachment, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${entry.attachments.length}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  if (entry.hasLocation)
-                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Photo collage with padding from card edges
+            if (entry.photoAttachments.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(4),
+                child: TimelinePhotoCollage(
+                  photos: entry.photoAttachments,
+                  onPhotoTap: (index) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EntryEditScreen(entry: entry),
+                      ),
+                    );
+                  },
+                ),
               ),
 
-              const SizedBox(height: 12),
-
-              // Title
-              if (entry.title.isNotEmpty) ...[
-                Text(
-                  entry.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              // Content preview
-              if (entry.content.isNotEmpty) ...[
-                Text(
-                  entry.content,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              // Tags
-              if (entry.hasTags) ...[
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: entry.tags
-                      .take(3)
-                      .map(
-                        (tag) => Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            tag,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.blue[700]),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-                if (entry.tags.length > 3)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      '+${entry.tags.length - 3} more tags',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+            // Content section with padding
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                16, 
+                entry.photoAttachments.isNotEmpty ? 0 : 16, 
+                16, 
+                16
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title
+                  if (entry.title.isNotEmpty) ...[
+                    Text(
+                      entry.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                const SizedBox(height: 8),
-              ],
+                    const SizedBox(height: 8),
+                  ],
 
-              // Photo attachments preview
-              if (entry.photoAttachments.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 80,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: entry.photoAttachments.length,
-                    itemBuilder: (context, index) {
-                      final attachment = entry.photoAttachments[index];
-                      return Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        child: TimelineAttachmentThumbnail(
-                          attachment: attachment,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ],
-          ),
+                  // Content preview
+                  if (entry.content.isNotEmpty)
+                    Text(
+                      entry.content,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
+      ),
       ),
     );
   }

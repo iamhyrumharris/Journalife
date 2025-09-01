@@ -47,7 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _currentIndex = index;
           });
         },
-        physics: const NeverScrollableScrollPhysics(), // Disable swipe navigation
+        physics:
+            const NeverScrollableScrollPhysics(), // Disable swipe navigation
         children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -59,48 +60,33 @@ class _HomeScreenState extends State<HomeScreen> {
           });
           _pageController.animateToPage(
             index,
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 1),
             curve: Curves.easeInOut,
           );
         },
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.calendar_today,
-              semanticLabel: 'Calendar view',
-            ),
+            icon: Icon(Icons.calendar_today, semanticLabel: 'Calendar view'),
             label: 'Calendar',
             tooltip: 'View calendar and entries by date',
           ),
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.timeline,
-              semanticLabel: 'Timeline view',
-            ),
+            icon: Icon(Icons.timeline, semanticLabel: 'Timeline view'),
             label: 'Timeline',
             tooltip: 'View chronological timeline of entries',
           ),
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.book,
-              semanticLabel: 'Reflect view',
-            ),
+            icon: Icon(Icons.book, semanticLabel: 'Reflect view'),
             label: 'Reflect',
             tooltip: 'View statistics and reflection insights',
           ),
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.map,
-              semanticLabel: 'Map view',
-            ),
+            icon: Icon(Icons.map, semanticLabel: 'Map view'),
             label: 'Map',
             tooltip: 'View entries with location on map',
           ),
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.attachment,
-              semanticLabel: 'Attachments view',
-            ),
+            icon: Icon(Icons.attachment, semanticLabel: 'Attachments view'),
             label: 'Attachments',
             tooltip: 'View media and file attachments',
           ),
@@ -112,10 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.pushNamed(context, '/entry/create');
         },
         tooltip: 'Create new journal entry',
-        child: const Icon(
-          Icons.add,
-          semanticLabel: 'Add new entry',
-        ),
+        child: const Icon(Icons.add, semanticLabel: 'Add new entry'),
       ),
     );
   }

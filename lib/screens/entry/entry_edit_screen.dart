@@ -12,6 +12,7 @@ import '../../widgets/text_formatting_toolbar.dart';
 import '../../widgets/full_screen_gallery_widget.dart';
 import '../../widgets/responsive_entry_layout.dart';
 import '../../utils/responsive_breakpoints.dart';
+import '../../utils/string_formatters.dart';
 
 class EntryEditScreen extends ConsumerStatefulWidget {
   final Entry? entry;
@@ -138,10 +139,10 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> with WidgetsB
       );
     }
 
-    // Get current date for display
-    final now = DateTime.now();
+    // Get date for display - use initialDate if provided, otherwise current date
+    final displayDate = widget.initialDate ?? widget.entry?.createdAt ?? DateTime.now();
     final dateFormatter = DateFormat('E, MMM d, yyyy h:mm a');
-    final formattedDate = dateFormatter.format(now);
+    final formattedDate = dateFormatter.format(displayDate);
 
     return PopScope(
       onPopInvokedWithResult: (didPop, result) {
@@ -246,23 +247,23 @@ class _EntryEditScreenState extends ConsumerState<EntryEditScreen> with WidgetsB
                         ),
                       ),
                       const SizedBox(width: 16),
-                      Icon(
-                        Icons.location_on,
-                        size: 14,
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _locationController.text.isEmpty
-                            ? 'Unknown Location'
-                            : _locationController.text,
-                        style: TextStyle(
+                      if (_locationController.text.isNotEmpty) ...[
+                        Icon(
+                          Icons.location_on,
+                          size: 14,
                           color: colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
                         ),
-                      ),
-                      const SizedBox(width: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          StringFormatters.formatLocationForMetadata(_locationController.text),
+                          style: TextStyle(
+                            color: colorScheme.onSurface.withValues(alpha: 0.5),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                      ],
                       Icon(
                         Icons.wb_sunny,
                         size: 14,
